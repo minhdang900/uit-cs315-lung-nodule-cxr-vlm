@@ -24,11 +24,11 @@ def main():
     a = ap.parse_args()
     df = pd.concat([read_manifest(m) for m in a.manifests])
     tr = subsample_negatives(df[df.split == "train"], a.neg_per_pos, a.seed)
-    yaml_path = export_yolo(tr, df[df.split == "val"], a.data_root, f"{a.work}/yolo_data")
+    yaml_path = export_yolo(tr, df[df.split == "val"], a.data_root, f"{a.work}/yolo_data_seed{a.seed}")
     model = YOLO(a.weights)
     model.train(data=str(yaml_path), imgsz=896, epochs=a.epochs, batch=16, seed=a.seed,
                 project=a.work, name=f"seed{a.seed}", exist_ok=True)
-    model = YOLO(f"{a.work}/seed{a.seed}/weights/best.pt")  # best epoch, not last
+    model = YOLO(str(model.trainer.best))  # best epoch, not last
     score = yolo_scorer(model)
     ev = df[df.split != "train"]
     for r in tqdm(ev.itertuples(), total=len(ev)):
