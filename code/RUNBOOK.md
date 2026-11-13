@@ -29,7 +29,7 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    print({k: v.shape for k, v in ex.items()})
    ```
    Kiểm tra tiền tố của Gemma (prompt phải là tiền tố của prompt+answer) không ném `ValueError`.
-3. **Loss đầu tiên của pilot 64 mẫu.** Chạy `train_lora.py ... --max-train 160 --epochs 1` (xem E3; 160 mẫu với grad-accum 8 cho 20 bước tối ưu nên `loss` được ghi ở bước 10 và 20). Dòng log đầu tiên (`logging_steps=10`) phải có `loss` khoảng 0,5–3. Nếu ~10–25 nghĩa là gradient accumulation bị chia hai lần: dừng và sửa. Đọc thêm `train_loss` cuối cùng trong log/`trainer_state.json`.
+3. **Loss đầu tiên của pilot 160 mẫu.** Chạy `train_lora.py ... --max-train 160 --epochs 1` (xem E3; 160 mẫu với grad-accum 8 cho 20 bước tối ưu nên `loss` được ghi ở bước 10 và 20). Dòng log đầu tiên (`logging_steps=10`) phải có `loss` khoảng 0,5–3. Nếu ~10–25 nghĩa là gradient accumulation bị chia hai lần: dừng và sửa. Đọc thêm `train_loss` cuối cùng trong log/`trainer_state.json`.
 4. **Loại GPU.**
    ```python
    import torch; print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())
@@ -45,9 +45,10 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    ```bash
    %%bash
    export M=../data/processed D=/content/data O=../outputs
-   python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --epochs 1 --work $O/yolo_smoke --out /content/smoke.jsonl
-   ls $O/yolo_smoke/seed0/weights/best.pt
+   python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --epochs 1 --work /content/yolo_smoke --out /content/smoke.jsonl
+   ls /content/yolo_smoke/seed0/weights/best.pt
    ```
+   Lưu ý: lệnh thay thế này sau khi train còn dự đoán **toàn bộ** các split đánh giá (val, test, test_nih, test_jsrt), nên chậm; có thể dừng ô sau khi `best.pt` đã xuất hiện.
 6. **Thời gian mỗi ảnh của mặt nạ phổi trong `run_audit.py`.** PSPNet của torchxrayvision chạy trên CPU. Đo trên 10 ảnh:
    ```python
    import sys, time; sys.path.insert(0, "scripts")
@@ -61,6 +62,13 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    print((time.time() - t) / len(df), "giây/ảnh")
    ```
    Nếu quá chậm, dùng `--lung-mask heuristic` và ghi quyết định đó vào `$O/budget.md`.
+7. **Thời gian suy luận mỗi ảnh của VLM.** Với mỗi model, chạy 50 ảnh val (cấu hình `pilot`, ghi ra ngoài `$O/preds/` để không lẫn vào báo cáo):
+   ```bash
+   for m in medgemma qwen; do
+     python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv --splits val --limit 50 --data-root $D --config pilot --max-new-tokens 256 --out /content/pilot_$m.jsonl
+   done
+   ```
+   Đọc tốc độ ở thanh tqdm khi chạy xong (`s/it`, mỗi `it` là một ảnh, gồm cả tính điểm yes/no và sinh văn bản; không tính thời gian tải model) làm giây/ảnh, ghi vào `$O/budget.md`. Ngoại suy chi phí C0: giây/ảnh × số ảnh của `val test test_nih test_jsrt` × 3 lần chạy × 2 model. Nếu vượt ngân sách, xem mục "Ngân sách" bên dưới.
 
 ## 0. Mỗi phiên Colab
 ```python
@@ -93,21 +101,23 @@ Kết quả: `$O/e0_data.md`, `$O/e0_data_edges.json`.
 ```bash
 for s in 0 1 2; do
   python scripts/train_densenet.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --seed $s --out $O/preds/B1.jsonl
-  python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --seed $s --work $O/yolo --out $O/preds/B2.jsonl
+  python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --seed $s --work /content/yolo --out $O/preds/B2.jsonl
+  mkdir -p $O/yolo/seed$s/weights && cp /content/yolo/seed$s/weights/best.pt $O/yolo/seed$s/weights/best.pt
 done
 ```
-B2 xuất dữ liệu YOLO riêng cho từng seed (`$O/yolo/yolo_data_seed{seed}`) và lưu trọng số tại `$O/yolo/seed{seed}/weights/best.pt`.
+B2 làm việc trên ổ local `/content/yolo` (xuất ảnh YOLO lên Drive rất chậm): dữ liệu YOLO riêng cho từng seed nằm ở `/content/yolo/yolo_data_seed{seed}`, trọng số ở `/content/yolo/seed{seed}/weights/best.pt`. Dòng `cp` chép `best.pt` về `$O/yolo/seed{seed}/weights/best.pt` trên Drive (E5 dùng file này); `/content` mất khi phiên Colab kết thúc.
 
 ## E2. Zero-shot C0 (MedGemma, Qwen; 3 lần: nhiệt độ 0 một lần, 0,7 hai lần)
 ```bash
 for m in medgemma qwen; do
-  python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C0-$m --run 0 --temperature 0 --out $O/preds/C0-$m.jsonl
+  python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C0-$m --run 0 --temperature 0 --max-new-tokens 256 --out $O/preds/C0-$m.jsonl
   for r in 1 2; do
-    python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C0-$m --run $r --temperature 0.7 --out $O/preds/C0-$m.jsonl
+    python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C0-$m --run $r --temperature 0.7 --max-new-tokens 256 --out $O/preds/C0-$m.jsonl
   done
 done
 ```
-Script tự bỏ qua ảnh đã chạy, nên nếu Colab ngắt kết nối thì chỉ cần chạy lại cùng lệnh.
+Script tự bỏ qua ảnh đã chạy, nên nếu Colab ngắt kết nối thì chỉ cần chạy lại cùng lệnh. `--max-new-tokens 256` vì model zero-shot hay trả lời dài, 96 token dễ cắt cụt JSON.
+Bảng chính (`summary.csv`, `summary.md`) chỉ dùng run 0 (nhiệt độ 0); run 1–2 chỉ dùng cho `run_agreement.csv` (độ ổn định) và vẫn có trong `summary_per_seed.csv`.
 
 ## E3. LoRA MedGemma C1–C3 (3 seed)
 Pilot đo thời gian và loss đầu tiên (kiểm tra mục 3 ở trên): thêm `--max-train 160 --epochs 1` vào một lệnh `train_lora.py` rồi đọc `timing.json`, log (`loss` ở bước 10 và 20) và `train_loss` cuối.
@@ -119,8 +129,9 @@ for s in 0 1 2; do
 done
 ```
 Dự đoán:
-- C1 dùng `--prompt cls --generate none`, vì chỉ cần điểm.
+- C1 dùng `--prompt cls`. Nên chạy `--generate all --max-new-tokens 16` (câu trả lời cls ngắn) để C1 có các tỷ lệ chế độ bình thường (`raw_sens`, `no_on_pos`, `yes_on_neg`, `unparsed`); `--generate none` chỉ cho điểm và để các cột đó trống (NaN).
 - C2 và C3 dùng `--prompt loc --generate all`.
+- Quy tắc chung: mọi lệnh dẫn xuất từ một cấu hình (C4, đường học, E5) dùng đúng `--prompt`/`--generate` của cấu hình nguồn (`--prompt cls` nếu nguồn là C1, `--prompt loc` nếu là C2/C3).
 - Mỗi lệnh chạy trên `val test test_nih test_jsrt`, với `--adapter $O/lora/<cfg>-s$s/final --config <cfg> --seed $s`, ghi vào `$O/preds/<cfg>.jsonl`.
 
 Ví dụ cho C3:
@@ -130,10 +141,10 @@ for s in 0 1 2; do
 done
 ```
 
-Đường học (sensitivity theo epoch): chạy `predict_vlm.py --splits val --generate none` cho từng `checkpoint-*` của seed 0, với `--config <cfg>-ep<k>`.
+Đường học (sensitivity theo epoch): chạy `predict_vlm.py --splits val --generate none` cho từng `checkpoint-*` của seed 0, với `--config <cfg>-ep<k>` và cùng `--prompt` của cấu hình nguồn (`--prompt cls` cho C1, `--prompt loc` cho C2/C3).
 
 ## E4. C4: cấu hình tốt nhất trên Qwen2.5-VL-3B (1–3 seed)
-Chọn cấu hình tốt nhất trong C1–C3 theo **trung bình `val_sens90` qua các seed** trong `$O/report/val_selection.csv` (sensitivity trên val tại ngưỡng `t90` của đúng lần chạy đó; `val_auc` để tham khảo). Không bao giờ chọn từ các cột của tập test. Chạy `make_report.py` trước để có file này. Chạy lại `train_lora.py --model qwen` với đúng các cờ của cấu hình đó, rồi dự đoán với `--config C4`.
+Chọn cấu hình tốt nhất trong C1–C3 theo **trung bình `val_sens90` qua các seed** trong `$O/report/val_selection.csv` (sensitivity trên val tại ngưỡng `t90` của đúng lần chạy đó; `val_auc` để tham khảo). Không bao giờ chọn từ các cột của tập test. Chạy `make_report.py` trước để có file này. Chạy lại `train_lora.py --model qwen` với đúng các cờ của cấu hình đó, rồi dự đoán với `--model qwen --config C4` và đúng `--prompt`/`--generate` (cùng `--max-new-tokens`) của cấu hình nguồn.
 
 ## Báo cáo
 ```bash
@@ -141,9 +152,10 @@ python scripts/make_report.py --manifests $M/manifest_vinbig.csv $M/manifest_nih
 ```
 
 ## E5. Kiểm toán che vùng (C0-medgemma, cấu hình LoRA tốt nhất, B2), trên `test` và `test_jsrt`
+"Cấu hình LoRA tốt nhất" = cấu hình C1–C3 có trung bình `val_sens90` qua seed cao nhất trong `$O/report/val_selection.csv` (giống E4; không chọn theo test). Dùng adapter seed 0 của cấu hình đó và `--prompt` của nó (`--prompt cls` nếu là C1; mặc định `loc` cho C2/C3).
 Lấy ngưỡng `t90` từ `$O/report/thresholds.json` (khóa dạng `config|seed|run`), rồi chạy (`--manifest` theo split: `manifest_vinbig.csv` cho `test`, `manifest_jsrt.csv` cho `test_jsrt`):
 ```bash
-# LoRA tốt nhất (ví dụ C3, seed 0)
+# LoRA tốt nhất (ví dụ C3, seed 0; nếu là C1 thì thêm --prompt cls)
 python scripts/run_audit.py --scorer vlm --model medgemma --adapter $O/lora/C3-s0/final --manifest $M/manifest_jsrt.csv --split test_jsrt --data-root $D --threshold <t90> --edges-json $O/e0_data_edges.json --out $O/audit/C3_jsrt.json
 # C0 zero-shot (không có --adapter)
 python scripts/run_audit.py --scorer vlm --model medgemma --manifest $M/manifest_jsrt.csv --split test_jsrt --data-root $D --threshold <t90 của C0-medgemma|0|0> --edges-json $O/e0_data_edges.json --out $O/audit/C0_jsrt.json
@@ -155,9 +167,9 @@ Thêm `--lung-mask heuristic` nếu mặt nạ PSPNet trên CPU quá chậm (ki�
 Tóm tắt trong file `.json` có `flip_t1`, `flip_t2`, `delta` tính trên tập con ghép cặp (những ảnh T2 tạo được), cùng `flip_t1_all` (toàn bộ ảnh) và `n_t2_ok` (cỡ tập con ghép cặp). **Số cần báo cáo là `delta` (= `flip_t1` − `flip_t2`)**, vì cả hai vế dùng cùng một tập ảnh; báo kèm `n_t2_ok`. `flip_t1_all` chỉ để tham khảo.
 
 ## Ngân sách (spec §7)
-Đo thời gian ở Task 13 Bước 2. Nếu một lượt vượt 3 giờ, cắt theo thứ tự:
+Đo thời gian huấn luyện bằng pilot ở E3 (`timing.json`) và thời gian suy luận ở kiểm tra mục 7. Nếu một lượt vượt 3 giờ, cắt theo thứ tự:
 1. `--neg-per-pos` 4 → 2.
-2. Giảm độ phân giải.
+2. Giảm độ phân giải — không áp dụng cho MedGemma (processor cố định 896); chỉ áp dụng cho Qwen qua `min_pixels`/`max_pixels` — chỉnh tay trong `vlm/hf.py` (không có cờ dòng lệnh).
 3. `--epochs 2`.
 4. C1 chỉ 1 seed.
 
