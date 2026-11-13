@@ -65,3 +65,11 @@ def test_regex_fallback_variants():
     f = parse_answer('nodule_present: true, but the JSON is cut {"nodule_present": tr')
     assert f.label == 1 and not f.ok
     assert parse_answer('"nodule": false (truncated').label == 0
+
+
+def test_non_label_nodule_key_does_not_shadow_label_key():
+    p = parse_answer('{"nodule_location": "RUL", "nodule_present": "yes", "boxes": [[10, 10, 50, 50]]}')
+    assert p.ok and p.label == 1 and p.boxes == [[10.0, 10.0, 50.0, 50.0]]
+    q = parse_answer('{"nodule_size_mm": 12, "nodule_present": true}')
+    assert q.ok and q.label == 1
+    assert parse_answer('{"nodule_location": "right upper lobe"}').label is None
