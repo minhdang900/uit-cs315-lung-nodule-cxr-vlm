@@ -11,6 +11,32 @@ JSRT_SIZE_PX = 2048
 JSRT_PIXEL_MM = 0.175
 JSRT_MM_PER_PX_896 = JSRT_PIXEL_MM * JSRT_SIZE_PX / IMG_SIZE
 
+# Clinical-info file names differ between JSRT releases (matched case-insensitively).
+CLN_NAMES = ("CLNDAT_EN.txt", "CLNDAT_E.TXT")
+NN_NAMES = ("NNDAT_EN.txt", "CNNDAT_EN.TXT", "CNNDAT_E.TXT")
+
+
+def find_clinical_file(raw, names) -> Path:
+    """First file under `raw` (recursive) whose name matches one of `names`, ignoring case."""
+    wanted = [n.lower() for n in names]
+    hits = {p.name.lower(): p for p in Path(raw).rglob("*") if p.is_file() and p.name.lower() in wanted}
+    for n in wanted:
+        if n in hits:
+            return hits[n]
+    raise FileNotFoundError(f"none of {list(names)} found under {raw}")
+
+
+def find_jsrt_image(raw, stem: str) -> Path:
+    """Image file for `stem`: the original 12-bit .IMG if present, else the DICOM release (.dcm)."""
+    by_ext: dict = {}
+    for p in Path(raw).rglob("*"):
+        if p.is_file() and p.stem.upper() == stem.upper():
+            by_ext.setdefault(p.suffix.lower(), p)
+    for ext in (".img", ".dcm"):
+        if ext in by_ext:
+            return by_ext[ext]
+    raise FileNotFoundError(f"no .IMG or .dcm for {stem} under {raw}")
+
 
 def parse_clndat(text: str) -> pd.DataFrame:
     rows = []

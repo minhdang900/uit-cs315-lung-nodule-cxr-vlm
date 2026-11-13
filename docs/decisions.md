@@ -161,12 +161,24 @@ Các mục D1–D27 do nhóm trước ghi lúc bàn giao (2026-11-13), lấy t�
 - **Lý do:** nhóm mới cần quy trình rõ ràng để làm song song và giữ lịch sử.
 - **Nguồn:** `docs/handoff/so_tay_ban_giao.pdf` §7.
 
+### D28 – 2026-11-13 – Nguồn dữ liệu JSRT và NIH
+- **Quyết định:** JSRT dùng bản DICOM chính thức tại imgcom.jsrt.or.jp/download; file lâm sàng `CLNDAT_EN.txt`/`CNNDAT_EN.TXT` lấy từ repo HybridGNet vì trang đăng ký chính thức (db.jsrt.or.jp) đã chết. `prepare_jsrt.py` đọc cả `.IMG` lẫn `.dcm`. NIH tải từ Box chính thức theo `file_id` (link static cũ đã hỏng) và chỉ giữ 656 ảnh manifest cần (`scripts/download_nih.sh`).
+- **Lý do:** nguồn cũ không còn truy cập được; tải toàn bộ 45 GB ảnh NIH không cần thiết khi manifest chỉ dùng 656 ảnh.
+- **Kiểm chứng:** JSRT 247 DICOM 2048×2048, 0,175 mm/px, MONOCHROME2; manifest 154/93; box khớp nốt khi xem bằng `draw_boxes.py`.
+- **Nguồn:** `code/scripts/download_jsrt.sh`, `code/scripts/download_nih.sh`, `code/src/nodulecxr/data/jsrt.py`.
+
+### D29 – 2026-11-13 – Kết quả E0 (dữ liệu đã chuẩn bị)
+- **Kết quả:** `data/processed/` (4,9 GB, 896 px) gồm VinBigData 15.000 ảnh: train 10.500 (578 dương), val 1.500 (83), test 3.000 (165), tỷ lệ dương 5,5%; NIH 656 ảnh (164 dương, 492 âm); JSRT 247 ảnh (154 dương, 93 âm). Tertile diện tích box tương đối (VinBigData train): 0,00103 và 0,00829. Ca dương VinBigData theo số bác sĩ đồng ý: 1 bác sĩ 421, 2 bác sĩ 224, 3 bác sĩ 181.
+- **Lưu ý:** 826 ảnh dương, gấp đôi con số 410 trong spec, vì code tính ảnh là dương nếu **ít nhất một** bác sĩ đánh dấu Nodule/Mass (D10). Hơn một nửa ca dương chỉ có 1 bác sĩ, nên nhãn nhiễu hơn; cân nhắc phân tích phụ với ca ≥ 2 bác sĩ. NIH gần như không có nốt nhỏ theo ngưỡng VinBigData (small 2, medium 81, large 81).
+- **Nguồn dữ liệu thô:** VinBigData `train.csv` chính thức (Kaggle) + ảnh PNG 1024 px `xhlulu/vinbigdata-chest-xray-resized-png-1024x1024` (`train_meta.csv` dim0/dim1 là kích thước gốc, đã kiểm: không box nào vượt). NIH và JSRT xem D28. Đã kiểm tra box bằng `draw_boxes.py` trên cả ba bộ.
+- **Nguồn:** `outputs/e0_data.md`, `outputs/e0_data_edges.json` (không commit; chạy lại `data_stats.py` để tạo).
+
 ---
 
 ## Mẫu cho mục mới
 
 ```markdown
-### D28 – YYYY-MM-DD – <quyết định ngắn>
+### D30 – YYYY-MM-DD – <quyết định ngắn>
 - **Quyết định:** ...
 - **Lý do:** ...
 - **Nguồn:** <spec §..., PR #..., outputs/... (ngày chạy)>

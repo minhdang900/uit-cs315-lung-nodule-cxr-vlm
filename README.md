@@ -45,7 +45,8 @@ flowchart LR
 
 - [x] Pipeline đã cài đặt xong; `cd code && pytest -q` chạy 75 test và tất cả đều đạt.
 - [ ] Phần GPU mới kiểm tra ở mức biên dịch. Phiên Colab đầu tiên **phải** chạy 7 mục "Kiểm tra bắt buộc" trong RUNBOOK.
-- [ ] Chưa tải dữ liệu, chưa chạy thí nghiệm nào (E0–E5).
+- [x] E0 dữ liệu (2026-11-13): `data/processed/` (4,9 GB) đã chuẩn bị trên Google Drive của chủ repo, không có trong git. Xin GVHD chia sẻ thư mục này, hoặc tự tạo lại bằng `scripts/download_nih.sh`, `scripts/download_jsrt.sh`, Kaggle (VinBigData) và các `prepare_*.py`. Số liệu ở `docs/decisions.md` D29.
+- [ ] Chưa chạy thí nghiệm E1–E5.
 - [ ] Báo cáo còn các ô kết quả `[--]`.
 
 ## Bắt đầu nhanh (CPU, máy cá nhân)

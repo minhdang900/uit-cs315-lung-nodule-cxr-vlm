@@ -126,11 +126,16 @@ của Colab (mất khi hết phiên) và chỉ để \code{data/processed/} trê
       Ảnh PNG phải tên \code{<image\_id>.png}.
 \end{itemize}
 
-\begin{unsurebox}
-Sổ tay chưa kiểm chứng tên bộ PNG cụ thể trên Kaggle. Các bộ cộng đồng kiểu ``vinbigdata chest xray resized png'' thường có
-\code{train\_meta.csv} với cột \code{dim0}, \code{dim1}; hãy mở file kiểm tra: (1) \code{dim0}/\code{dim1} là kích thước \emph{gốc}, không phải kích thước PNG;
-(2) \code{train.csv} đi kèm còn tọa độ gốc. Nếu sai, box sẽ lệch: \code{draw\_boxes.py} ở E0 sẽ cho thấy.
-\end{unsurebox}
+\begin{keybox}
+\textbf{Đã kiểm chứng (2026-11-13), cách đã dùng:} đăng nhập Kaggle bằng \code{kaggle auth login} (OAuth, không cần lưu token), chấp nhận luật cuộc thi, rồi:
+\begin{lstlisting}[language=bash]
+cd ../data/raw/vinbig
+kaggle competitions download vinbigdata-chest-xray-abnormalities-detection -f train.csv && unzip train.csv.zip
+kaggle datasets download xhlulu/vinbigdata-chest-xray-resized-png-1024x1024    # 7.35 GB
+unzip -q vinbigdata-chest-xray-resized-png-1024x1024.zip 'train/*' 'train_meta.csv'
+\end{lstlisting}
+Trong \code{train\_meta.csv}, \code{dim0}/\code{dim1} là kích thước \emph{gốc} (823--3408\,px; không box nào vượt), nên dùng được với cờ mặc định. Ảnh PNG 1024$\times$1024 (đã méo tỷ lệ), code quy về 896$\times$896 theo kích thước gốc. Kết quả E0: xem \code{docs/decisions.md} D29.
+\end{keybox}
 
 \textbf{Tùy chọn: tập test chính thức VinDr-CXR.} \code{prepare\_vinbig.py} có \code{--official-test-csv} và \code{--official-test-dicom}.
 Khi dùng, VinBigData Kaggle được chia 85/15 (train/val) và tập test chính thức trở thành \code{test}. Phần này đọc DICOM bắt buộc.
@@ -144,7 +149,8 @@ Tập test VinDr-CXR nằm trên PhysioNet (cần tài khoản được xác th�
 \subsubsection{NIH ChestX-ray14 (test ngoài phân phối 1)}
 
 \begin{itemize}
-\item Nguồn: NIH Clinical Center (trang tải chính thức), hoặc bản Kaggle của bộ này.
+\item Nguồn: NIH Clinical Center, \url{https://nihcc.app.box.com/v/ChestXray-NIHCC} (12 gói \code{images\_001..012.tar.gz}, tổng $\approx$45\,GB). Các link \code{nihcc.box.com/shared/static/...} cũ (trong script \code{batch\_download\_zips.py}) đã hỏng; tải theo \code{file\_id} như trong \code{scripts/download\_nih.sh}.
+\item Cách nhanh nhất: \code{bash scripts/download\_nih.sh ../data/raw/nih}. Script tải 2 file CSV, tạo symlink \code{Data\_Entry\_2017.csv} $\rightarrow$ \code{Data\_Entry\_2017\_v2020.csv}, tính trước danh sách ảnh manifest cần (656 ảnh: 164 dương, 492 âm với \code{--neg-ratio 3}, \code{seed=0}), rồi đọc lần lượt từng gói và chỉ giữ các ảnh đó. Vẫn phải đọc đủ 45\,GB, nhưng chỉ lưu khoảng 0{,}3\,GB. Đổi \code{--neg-ratio} thì phải chạy lại script.
 \item \code{prepare\_nih.py --raw-dir} cần trong thư mục đó (code tìm đệ quy):
   \begin{itemize}
   \item \code{Data\_Entry\_2017.csv} (cột dùng: \code{Image Index}, \code{Finding Labels}, \code{Patient ID});
@@ -158,15 +164,16 @@ Tập test VinDr-CXR nằm trên PhysioNet (cần tài khoản được xác th�
 \subsubsection{JSRT (test ngoài phân phối 2, có độ mờ)}
 
 \begin{itemize}
-\item Nguồn: Japanese Society of Radiological Technology, đăng ký tại \url{http://db.jsrt.or.jp/eng.php} (hoặc trang jsrt.or.jp).
-\item 247 ảnh: 154 có nốt (\code{JPCLN*.IMG}), 93 không có nốt (\code{JPCNN*.IMG}). Ảnh thô 2048$\times$2048, 16 bit, big-endian (\code{images.py}).
-\item \code{prepare\_jsrt.py --raw-dir} cần: \code{CLNDAT\_EN.txt}, \code{NNDAT\_EN.txt} (đúng tên này, ở ngay trong \code{--raw-dir}) và các file \code{.IMG} (tìm đệ quy).
+\item Nguồn ảnh (chính thức, miễn phí): \url{http://imgcom.jsrt.or.jp/download/}, bản DICOM: \code{Nodule154images.zip} (806\,MB) và \code{NonNodule93images.zip} (484\,MB). Trang cũ \code{db.jsrt.or.jp} đã ngừng hoạt động.
+\item File thông tin lâm sàng (tọa độ, kích thước, độ mờ) chính thức chỉ dành cho người đăng ký, mà trang đăng ký đã chết. Đồ án dùng bản sao \code{CLNDAT\_EN.txt} và \code{CNNDAT\_EN.TXT} trong repo HybridGNet (\url{https://github.com/ngaggion/HybridGNet}); chỉ dùng cho nghiên cứu, không commit (quyết định D28).
+\item Cách nhanh nhất: \code{bash scripts/download\_jsrt.sh ../data/raw/jsrt} (tải ảnh, giải nén, tải 2 file lâm sàng).
+\item 247 ảnh: 154 có nốt (\code{JPCLN*}), 93 không có nốt (\code{JPCNN*}); 2048$\times$2048, 0{,}175\,mm/pixel, MONOCHROME2.
+\item \code{prepare\_jsrt.py} nhận cả bản \code{.IMG} cũ lẫn bản DICOM mới (ưu tiên \code{.IMG} nếu có), và nhận tên file lâm sàng \code{CLNDAT\_EN.txt}/\code{CLNDAT\_E.TXT}, \code{NNDAT\_EN.txt}/\code{CNNDAT\_EN.TXT}/\code{CNNDAT\_E.TXT} (không phân biệt hoa thường, tìm đệ quy).
 \end{itemize}
 
-\begin{unsurebox}
-Tên \code{CLNDAT\_EN.txt}/\code{NNDAT\_EN.txt} được viết cứng trong \code{prepare\_jsrt.py}. Sổ tay chưa kiểm chứng gói tải hiện tại của JSRT
-dùng đúng tên này. Nếu khác, đổi tên file cho khớp (đừng sửa code nếu không cần). Parser bỏ qua dòng không bắt đầu bằng \code{JPCLN}/\code{JPCNN}.
-\end{unsurebox}
+\begin{keybox}
+\textbf{Đã kiểm chứng (2026-11-13):} chạy \code{prepare\_jsrt.py} trên bản DICOM cho 154 ảnh dương, 93 ảnh âm; \code{draw\_boxes.py} cho thấy box nằm đúng nốt (ví dụ JPCLN001 thùy trên trái, JPCLN004 thùy trên phải), ảnh không bị đảo màu.
+\end{keybox}
 
 \subsubsection{Lệnh tải gợi ý}
 
