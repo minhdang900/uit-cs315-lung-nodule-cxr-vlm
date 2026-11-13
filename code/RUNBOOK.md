@@ -2,6 +2,53 @@
 
 MedGemma từ chối tải model nếu không có GPU hỗ trợ bf16 (`load_base` ném `RuntimeError`), nên chỉ dùng L4 hoặc A100.
 
+## Trạng thái và việc cần làm (cập nhật 2026-11-13, bản `v0.2.0`)
+
+Đây là danh sách việc để nhóm làm tiếp. Làm theo thứ tự. Khi xong một mục, đổi `[ ]` thành `[x]`, ghi ngày, người làm và file kết quả. Commit theo quy trình nhánh: `exp/<E#-...>` hoặc `docs/...` → PR vào `develop`. Quyết định mới ghi vào `docs/decisions.md`.
+
+**Chú thích:** ✅ xong · ⏳ việc tiếp theo · ⬜ chưa làm · 🔁 làm lại khi cần
+
+### A. Đã xong (người bàn giao)
+| # | Hạng mục | Trạng thái | Kết quả / nơi xem |
+|---|---|---|---|
+| A1 | Pipeline `nodulecxr` (dữ liệu, VLM, LoRA, baseline, chỉ số, kiểm toán, báo cáo) | ✅ | `code/`; `pytest -q` → 79 passed (CPU) |
+| A2 | Repo GitHub, quy trình nhánh, báo cáo LaTeX, sổ tay bàn giao, nhật ký quyết định | ✅ | `report/main.pdf`, `docs/handoff/`, `docs/decisions.md` |
+| A3 | E0: tải dữ liệu thô | ✅ | `data/raw/` (8,4 GB, trên Drive của GVHD, không vào git); nguồn: `docs/decisions.md` D28–D29 |
+| A4 | E0: tạo ảnh 896 px + manifest, kiểm tra box bằng mắt | ✅ | `data/processed/` (4,9 GB): VinBigData 15.000 (826 dương), NIH 656 (164), JSRT 247 (154) |
+| A5 | E0: thống kê dữ liệu | ✅ | `outputs/e0_data.md`, `outputs/e0_data_edges.json` (trên Drive; tạo lại được, xem B3) |
+
+### B. Chuẩn bị (mỗi thành viên, làm một lần)
+| # | Việc | Trạng thái | Cách làm |
+|---|---|---|---|
+| B1 | Có quyền đọc thư mục `data/` (và `outputs/`) do GVHD chia sẻ trên Google Drive | ⏳ | Mở link chia sẻ → *Organize → Add shortcut* vào `MyDrive`, đặt tên `cs315-data` (xem §0) |
+| B2 | Clone repo vào Drive, tạo token Hugging Face, xin quyền `google/medgemma-4b-it`, lưu `HF_TOKEN` vào Colab Secrets | ⏳ | §0; sổ tay chương 5 |
+| B3 | Tạo lại `$O/e0_data_edges.json` trong bản clone của mình (cần cho `make_report.py`, `run_audit.py`) | ⏳ | Chạy lệnh `data_stats.py` ở mục E0 (vài giây, CPU) |
+| B4 | Colab Pro với GPU L4 hoặc A100 | ⏳ | Không dùng T4 |
+
+### C. Thí nghiệm (theo thứ tự; xem từng mục bên dưới)
+| # | Việc | Trạng thái | Đầu ra phải có | Điền vào báo cáo |
+|---|---|---|---|---|
+| C1 | 7 mục "Kiểm tra bắt buộc trên Colab" | ⏳ **làm đầu tiên** | ghi kết quả từng mục vào `$O/budget.md` | — |
+| C2 | E1: B1 DenseNet, B2 YOLOv8 × 3 seed | ⬜ | `$O/preds/B1.jsonl`, `B2.jsonl`, `$O/yolo/seed*/weights/best.pt` | Bảng kết quả chính |
+| C3 | E2: C0 zero-shot MedGemma, Qwen (run 0 ở nhiệt độ 0; run 1–2 ở 0,7) | ⬜ | `$O/preds/C0-medgemma.jsonl`, `C0-qwen.jsonl` | Bảng chính, độ ổn định |
+| C4 | E3: pilot 160 mẫu (loss đầu ≈ 0,5–3, thời gian) | ⬜ | `timing.json`, log; ghi vào `$O/budget.md` | — |
+| C5 | E3: LoRA MedGemma C1, C2, C3 × 3 seed + dự đoán | ⬜ | `$O/lora/C*-s*/final`, `$O/preds/C1.jsonl` … `C3.jsonl` | Bảng chính |
+| C6 | E3: đường học seed 0 (dự đoán từng checkpoint) | ⬜ | `$O/preds/<cfg>-ep<k>.jsonl` (**để riêng**, xem lưu ý D22) | Mục chế độ báo bình thường |
+| C7 | `make_report.py` lần 1 → chọn cấu hình tốt nhất theo trung bình `val_sens90` (chỉ C1–C3) | ⬜ | `$O/report/val_selection.csv`, `thresholds.json`; ghi lựa chọn vào `docs/decisions.md` | — |
+| C8 | E4: C4 = cấu hình tốt nhất trên Qwen2.5-VL-3B (1–3 seed) | ⬜ | `$O/preds/C4.jsonl` | Bảng chính |
+| C9 | E5: kiểm toán che vùng (C0-medgemma, LoRA tốt nhất, B2) trên `test` và `test_jsrt` | ⬜ | `$O/audit/*.json` (`delta`, `n_t2_ok`) | Bảng kiểm toán |
+| C10 | `make_report.py` lần cuối, điền mọi ô `[--]` trong `report/`, viết kết quả và thảo luận | ⬜ | `$O/report/summary.md` …; `report/main.pdf` biên dịch không lỗi | Toàn bộ chương 4–5 |
+
+### D. Phân tích thêm và việc tồn đọng
+| # | Việc | Trạng thái | Ghi chú |
+|---|---|---|---|
+| D1 | Phân tích phụ: chỉ các ca dương VinBigData có ≥ 2 bác sĩ đồng ý (405/826 ca: 224 có 2 bác sĩ, 181 có 3 bác sĩ) | ⬜ | Nhãn 1 bác sĩ nhiễu hơn (D29). Báo như phân tích độ nhạy, không thay bảng chính |
+| D2 | Nêu hạn chế: VinBigData chia theo `image_id` (không có mã bệnh nhân), bootstrap theo ảnh | ⬜ | Đã có trong báo cáo; kiểm lại khi viết thảo luận |
+| D3 | Script huấn luyện không chạy tiếp khi Colab ngắt | 🔁 | Chạy lại cả lượt; `predict_vlm.py` thì tự bỏ qua ảnh đã xong |
+| D4 | `draw_boxes.py` đặt tên ảnh NIH thành `*.png.png` | ⬜ | Lỗi hiển thị, không ảnh hưởng dữ liệu; sửa trên nhánh `feature/...` nếu muốn |
+
+**Không bao giờ:** chọn cấu hình hay ngưỡng theo tập test; commit dữ liệu, trọng số, `outputs/` hay token; dùng GPU T4 cho MedGemma.
+
 ## Kiểm tra bắt buộc trên Colab trước khi chạy đủ
 Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và sửa, đừng chạy tiếp.
 
@@ -24,7 +71,7 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    from nodulecxr.records import read_manifest
    from nodulecxr.images import load_image
    from nodulecxr.train.sft_data import build_example
-   df = read_manifest("../data/processed/manifest_vinbig.csv"); r = df[df.label == 1].iloc[0]
+   df = read_manifest("/content/data/manifest_vinbig.csv"); r = df[df.label == 1].iloc[0]
    ex = build_example(processor, load_image("/content/data", r.path), QUESTION_LOC, build_target(1, [[1, 2, 3, 4]]))
    print({k: v.shape for k, v in ex.items()})
    ```
@@ -44,7 +91,7 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    Cách thay thế, dùng đủ cờ bắt buộc của `train_yolo.py`:
    ```bash
    %%bash
-   export M=../data/processed D=/content/data O=../outputs
+   export M=/content/data D=/content/data O=../outputs
    python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --epochs 1 --work /content/yolo_smoke --out /content/smoke.jsonl
    ls /content/yolo_smoke/seed0/weights/best.pt
    ```
@@ -55,7 +102,7 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    from run_audit import lung_mask_xrv
    from nodulecxr.records import read_manifest
    from nodulecxr.images import load_image
-   df = read_manifest("../data/processed/manifest_jsrt.csv").head(10)
+   df = read_manifest("/content/data/manifest_jsrt.csv").head(10)
    lung_mask_xrv(load_image("/content/data", df.iloc[0].path))   # khởi động, không tính giờ
    t = time.time()
    for r in df.itertuples(): lung_mask_xrv(load_image("/content/data", r.path))
@@ -71,34 +118,37 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    Đọc tốc độ ở thanh tqdm khi chạy xong (`s/it`, mỗi `it` là một ảnh, gồm cả tính điểm yes/no và sinh văn bản; không tính thời gian tải model) làm giây/ảnh, ghi vào `$O/budget.md`. Ngoại suy chi phí C0: giây/ảnh × số ảnh của `val test test_nih test_jsrt` × 3 lần chạy × 2 model. Nếu vượt ngân sách, xem mục "Ngân sách" bên dưới.
 
 ## 0. Mỗi phiên Colab
-Lần đầu tiên: clone repo vào Google Drive của bạn (một lần duy nhất; repo private nên cần GitHub token hoặc `gh auth login`):
+Lần đầu tiên: clone repo vào Google Drive của bạn (một lần duy nhất; repo public nên không cần token):
 ```python
 from google.colab import drive
 drive.mount('/content/drive')
 %cd /content/drive/MyDrive
 !git clone https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git
 ```
-Mỗi phiên (đổi `REPO` nếu bạn clone vào chỗ khác; dữ liệu nằm ở `$REPO/data/`, không vào git):
+Mỗi phiên. Đổi `REPO` nếu bạn clone vào chỗ khác. `DATA` là thư mục chứa `processed/`: dùng shortcut `cs315-data` tới thư mục `data/` mà GVHD chia sẻ (mục B1), hoặc `f"{REPO}/data"` nếu bạn tự tạo dữ liệu trong bản clone. Dữ liệu không bao giờ vào git.
 ```python
 from google.colab import drive, userdata
 drive.mount('/content/drive')
 REPO = "/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm"
+DATA = "/content/drive/MyDrive/cs315-data"        # hoặc f"{REPO}/data"
 %cd {REPO}/code
 import os; os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")   # lấy từ Colab Secrets
 !pip install -q -e ".[gpu]"
 !huggingface-cli login --token $HF_TOKEN
-!mkdir -p /content/data && rsync -a ../data/processed/ /content/data/   # đọc ảnh từ ổ local
+!mkdir -p /content/data ../outputs && rsync -a "{DATA}/processed/" /content/data/   # ảnh + manifest_*.csv sang ổ local (~4,9 GB)
 ```
 Biến shell không giữ qua các dòng `!`, nên mọi ô chạy lệnh dưới đây phải bắt đầu bằng `%%bash` và `export` lại biến:
 ```bash
 %%bash
-export M=../data/processed D=/content/data O=../outputs
+export M=/content/data D=/content/data O=../outputs
 # HF_TOKEN đã nằm trong os.environ (đặt ở ô Python trên), ô %%bash kế thừa nó
 ```
-Biến dùng chung: `M="../data/processed"`, `D=/content/data`, `O=../outputs`. Các khối lệnh bash bên dưới là nội dung ô `%%bash` (sau dòng `export` ở trên).
+Biến dùng chung: `M=/content/data` (chứa `manifest_*.csv`), `D=/content/data` (ảnh), `O=../outputs` (kết quả, trên Drive trong bản clone, không vào git). Các khối lệnh bash bên dưới là nội dung ô `%%bash` (sau dòng `export` ở trên).
 
-## E0. Dữ liệu (Task 5)
-Chạy 3 script `prepare_*` (cờ bắt buộc: `prepare_vinbig.py --train-csv ... --out-root $M` cùng `--png-dir`/`--meta-csv` hoặc `--dicom-dir`; `prepare_nih.py --raw-dir ... --out-root $M`; `prepare_jsrt.py --raw-dir ... --out-root $M`), rồi:
+## E0. Dữ liệu — ✅ đã xong (2026-11-13)
+Dữ liệu đã có trong `data/raw/` và `data/processed/` (xem bảng trạng thái và `docs/decisions.md` D28–D29). Mỗi bản clone mới chỉ cần chạy lại `data_stats.py` (dòng thứ hai của khối lệnh bên dưới) để có `$O/e0_data_edges.json`.
+
+Nếu phải tạo lại từ đầu (chạy ở máy có dữ liệu thô, từ `code/`, với `M=../data/processed`): tải bằng `bash scripts/download_nih.sh ../data/raw/nih`, `bash scripts/download_jsrt.sh ../data/raw/jsrt`, còn VinBigData thì tải từ Kaggle (sổ tay §6.5). Sau đó chạy 3 script `prepare_*` (cờ bắt buộc: `prepare_vinbig.py --train-csv ... --out-root $M` cùng `--png-dir`/`--meta-csv` hoặc `--dicom-dir`; `prepare_nih.py --raw-dir ... --out-root $M`; `prepare_jsrt.py --raw-dir ... --out-root $M`), rồi:
 ```bash
 for d in vinbig nih jsrt; do python scripts/draw_boxes.py --manifest $M/manifest_$d.csv --data-root $M --out $O/qa/$d -n 8; done
 python scripts/data_stats.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --out $O/e0_data.md

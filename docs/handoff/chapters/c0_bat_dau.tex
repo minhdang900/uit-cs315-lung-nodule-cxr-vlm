@@ -11,13 +11,13 @@ Làm theo thứ tự. Mỗi dòng có chỗ đánh dấu. Cột cuối chỉ ch�
 \toprule
 & \textbf{\#} & \textbf{Việc} & \textbf{Xem} \\
 \midrule
-\cb & 1 & Nhận lời mời vào repo private \code{minhdang900/uit-cs315-lung-nodule-cxr-vlm} trên GitHub. & §\ref{sec:git} \\
+\cb & 1 & Mở repo public \code{minhdang900/uit-cs315-lung-nodule-cxr-vlm} trên GitHub; đọc bảng ``Trạng thái và việc cần làm'' đầu \code{code/RUNBOOK.md}. Muốn push thì xin quyền collaborator. & §\ref{sec:git} \\
 \cb & 2 & Clone repo một lần vào \code{/content/drive/MyDrive} (RUNBOOK §0, bước ``Lần đầu tiên''). Clone chỗ khác thì đổi \code{REPO}. & §\ref{sec:clone} \\
-\cb & 3 & Trên máy cá nhân: tạo venv, chạy \code{pip install -e ".[dev]"} rồi \code{pytest -q}. Phải thấy 75 passed (cần có torch; nếu không, vài test bị skip). & §\ref{sec:env-local} \\
+\cb & 3 & Trên máy cá nhân: tạo venv, chạy \code{pip install -e ".[dev]"} rồi \code{pytest -q}. Phải thấy 79 passed (cần có torch; nếu không, vài test bị skip). & §\ref{sec:env-local} \\
 \cb & 4 & Xin quyền tải \code{google/medgemma-4b-it} trên Hugging Face (chấp nhận điều khoản Health AI Developer Foundations). Tạo HF token. Lưu vào Colab Secrets tên \code{HF\_TOKEN}. & §\ref{sec:hf} \\
 \cb & 5 & Mua/chuẩn bị Colab Pro (GPU L4 hoặc A100). Không dùng T4. & §\ref{sec:colab} \\
-\cb & 6 & Đọc điều khoản và tải 3 bộ dữ liệu: VinBigData, NIH ChestX-ray14, JSRT. & §\ref{sec:data} \\
-\cb & 7 & Chạy 3 script \code{prepare\_*} để tạo ảnh 896 px và file manifest. & §\ref{sec:prepare} \\
+\cb & 6 & Đọc điều khoản 3 bộ dữ liệu. E0 \textbf{đã xong}: xin GVHD chia sẻ thư mục dữ liệu trên Drive, tạo lối tắt \code{cs315-data} trong \code{My Drive}. & §\ref{sec:clone}, §\ref{sec:data} \\
+\cb & 7 & Chỉ khi không được chia sẻ: tự tải dữ liệu và chạy 3 script \code{prepare\_*}. Mọi người chạy \code{data\_stats.py} để có \code{\$O/e0\_data\_edges.json}. & §\ref{sec:prepare} \\
 \cb & 8 & Phiên GPU đầu tiên: chạy đủ 7 mục kiểm tra bắt buộc. Mục nào hỏng thì dừng. & §\ref{sec:prechecks} \\
 \cb & 9 & Chạy E0 → E5 theo đúng thứ tự. Ghi ngân sách vào \code{outputs/budget.md}. & §\ref{sec:exp-run} \\
 \cb & 10 & Chạy \code{make\_report.py}, điền các ô đỏ trong báo cáo. & §\ref{sec:fill-report} \\

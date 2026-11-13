@@ -24,13 +24,13 @@ pip install -e ".[dev]"
 pytest -q
 \end{lstlisting}
 
-\textbf{Kết quả mong đợi}: dòng cuối có \code{75 passed} (khi đã có torch, xem hộp dưới). Các nhóm phụ thuộc trong \code{pyproject.toml}:
+\textbf{Kết quả mong đợi}: dòng cuối có \code{79 passed} (khi đã có torch, xem hộp dưới). Các nhóm phụ thuộc trong \code{pyproject.toml}:
 \code{dev} = pytest; \code{torchcpu} = torch (CPU); \code{gpu} = torch, transformers, peft, accelerate, torchxrayvision, ultralytics.
 Kiểm thử CPU không cần nhóm \code{gpu}.
 
 \begin{warnbox}
 \code{tests/test\_train.py} và một test trong \code{tests/test\_vlm.py} dùng \code{pytest.importorskip("torch")}: nếu máy chưa có \code{torch},
-các test đó bị \emph{bỏ qua} (skipped) thay vì chạy. Để thấy đủ 75 passed, cài thêm torch bản CPU:
+các test đó bị \emph{bỏ qua} (skipped) thay vì chạy. Để thấy đủ 79 passed, cài thêm torch bản CPU:
 \code{pip install -e ".[dev,torchcpu]"} rồi chạy lại \code{pytest -q}.
 \end{warnbox}
 
@@ -38,8 +38,9 @@ các test đó bị \emph{bỏ qua} (skipped) thay vì chạy. Để thấy đ�
 \subsection{Clone repo vào Google Drive}
 \label{sec:clone}
 
-Colab đọc code và dữ liệu từ Google Drive. Repo là private, nên bạn cần (1) được mời làm collaborator, (2) quyền xác thực GitHub:
-một \textbf{Personal Access Token} \en{PAT} hoặc \code{gh auth login} (RUNBOOK §0).
+Colab đọc code và dữ liệu từ Google Drive. Repo là \textbf{public}, nên clone không cần token.
+Chỉ khi muốn \emph{đẩy} (push) nhánh lên repo gốc, bạn mới cần được mời làm collaborator và xác thực GitHub
+(\textbf{Personal Access Token} \en{PAT} hoặc \code{gh auth login}). Cách khác là fork repo rồi mở PR.
 
 \textbf{[RUNBOOK] Lần đầu tiên} (chạy một lần duy nhất, trong một ô Colab): clone repo vào \code{/content/drive/MyDrive}.
 \begin{lstlisting}[language=Python]
@@ -52,17 +53,24 @@ Kết quả: bản clone nằm ở \code{/content/drive/MyDrive/uit-cs315-lung-n
 \code{REPO} bằng đường dẫn này (§\ref{sec:session}). Nếu bạn clone vào chỗ khác, chỉ cần đổi giá trị \code{REPO}.
 
 \begin{warnbox}
-\textbf{Xác thực khi clone repo private [GỢI Ý].} \code{git clone} sẽ hỏi tên người dùng và mật khẩu; mật khẩu là PAT, không phải mật khẩu GitHub.
-Nếu ô Colab không cho nhập, đặt PAT vào Colab Secrets (ví dụ tên \code{GH\_TOKEN}) và clone bằng
-\code{https://\{tok\}@github.com/...} với \code{tok = userdata.get("GH\_TOKEN")}. Sau đó chạy
-\code{git remote set-url origin https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git} trong thư mục repo
-để token không nằm lại trong \code{.git/config}. Không bao giờ dán token thẳng vào notebook.
+\textbf{Xác thực khi push [GỢI Ý].} \code{git push} sẽ hỏi tên người dùng và mật khẩu; mật khẩu là PAT, không phải mật khẩu GitHub.
+Nếu ô Colab không cho nhập, đặt PAT vào Colab Secrets (ví dụ tên \code{GH\_TOKEN}) và push bằng
+\code{https://\{tok\}@github.com/...} với \code{tok = userdata.get("GH\_TOKEN")}. Không lưu URL có token vào
+\code{.git/config}. Không bao giờ dán token thẳng vào notebook. Dễ nhất là push từ máy cá nhân.
 \end{warnbox}
 
 \textbf{Cách khác [GỢI Ý]}: trên máy có Google Drive for Desktop, clone vào thư mục \code{My Drive} đã đồng bộ; kết quả giống hệt.
 
 \textbf{Thư mục dữ liệu.} Trong bản clone có \code{data/README.md}. Dữ liệu nằm ở \code{\$REPO/data/raw/} (tải về) và
 \code{\$REPO/data/processed/} (do \code{prepare\_*} tạo). Cả hai bị gitignore; chỉ \code{data/README.md} vào git.
+
+\begin{keybox}
+\textbf{E0 đã xong (2026-11-13).} Chủ repo đã chuẩn bị sẵn \code{data/processed/} (4,9 GB). Xin GVHD chia sẻ thư mục dữ liệu trên Google Drive,
+rồi trong Drive chọn \emph{Sắp xếp → Thêm lối tắt} vào \code{My Drive}, đặt tên lối tắt là \code{cs315-data}
+(bên trong có \code{processed/}). Khi đó biến \code{DATA} ở §\ref{sec:session} là \code{/content/drive/MyDrive/cs315-data}.
+Không được chia sẻ thì tự tạo lại theo §\ref{sec:data} và §\ref{sec:prepare}, rồi đặt \code{DATA = f"\{REPO\}/data"}.
+Danh sách việc còn lại và trạng thái: đầu file \code{code/RUNBOOK.md}, mục ``Trạng thái và việc cần làm''.
+\end{keybox}
 
 % ===========================================================================
 \subsection{Quyền tải MedGemma và HF token}
@@ -224,22 +232,24 @@ và coi \emph{mọi} ảnh còn lại là âm (kể cả ảnh có bệnh khác,
 from google.colab import drive, userdata
 drive.mount('/content/drive')
 REPO = "/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm"
+DATA = "/content/drive/MyDrive/cs315-data"   # shared folder shortcut; or f"{REPO}/data"
 %cd {REPO}/code
 import os; os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")   # from Colab Secrets
 !pip install -q -e ".[gpu]"
 !huggingface-cli login --token $HF_TOKEN
-!mkdir -p /content/data && rsync -a ../data/processed/ /content/data/   # read images from local disk
+!mkdir -p /content/data ../outputs && rsync -a "{DATA}/processed/" /content/data/
 \end{lstlisting}
 
-\textbf{Giải thích từng dòng.} Gắn Drive; đặt \code{REPO} và chuyển vào \code{\$REPO/code}; nạp token vào biến môi trường; cài gói cùng nhóm \code{gpu};
-đăng nhập Hugging Face; chép ảnh đã xử lý từ Drive sang ổ local \code{/content/data} (đọc từ Drive rất chậm).
+\textbf{Giải thích từng dòng.} Gắn Drive; đặt \code{REPO} (bản clone) và \code{DATA} (thư mục dữ liệu được chia sẻ, xem §\ref{sec:clone});
+chuyển vào \code{\$REPO/code}; nạp token vào biến môi trường; cài gói cùng nhóm \code{gpu};
+đăng nhập Hugging Face; chép ảnh \emph{và} manifest từ Drive sang ổ local \code{/content/data} (đọc từ Drive rất chậm).
 
 Biến shell không giữ qua các dòng \code{!}. Vì vậy mọi ô chạy lệnh phải là ô \code{\%\%bash} và bắt đầu bằng \textbf{[RUNBOOK]}:
 \begin{lstlisting}[language=bash]
 %%bash
-export M=../data/processed D=/content/data O=../outputs
+export M=/content/data D=/content/data O=../outputs
 \end{lstlisting}
-\code{M}: manifest (trên Drive). \code{D}: gốc ảnh (ổ local). \code{O}: kết quả (trên Drive, gitignore).
+\code{M}: manifest và \code{D}: gốc ảnh (cả hai ở ổ local sau \code{rsync}). \code{O}: kết quả (trong bản clone trên Drive, gitignore).
 Các khối lệnh bash bên dưới đều là nội dung đặt \emph{sau} dòng \code{export} này.
 
 % ===========================================================================
@@ -328,7 +338,7 @@ print(m.trainer.best)   # file must exist
 \textbf{[RUNBOOK]} Cách 2, dùng đủ cờ bắt buộc của \code{train\_yolo.py}:
 \begin{lstlisting}[language=bash]
 %%bash
-export M=../data/processed D=/content/data O=../outputs
+export M=/content/data D=/content/data O=../outputs
 python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --epochs 1 --work /content/yolo_smoke --out /content/smoke.jsonl
 ls /content/yolo_smoke/seed0/weights/best.pt
 \end{lstlisting}
