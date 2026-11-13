@@ -9,7 +9,7 @@
 | [Spec](../design/2026-11-12-lung-nodule-cxr-vlm-lora-design.md) | Văn bản có hiệu lực cao nhất. Đọc kỹ §8.5. |
 | [RUNBOOK](../../code/RUNBOOK.md) | Nguồn duy nhất cho lệnh chạy. |
 | [Báo cáo (PDF)](../../report/main.pdf) | Báo cáo học thuật; ô đỏ `[--]` chờ kết quả. |
-| [Nhật ký quyết định](../decisions.md) | Vì sao mọi thứ đang như vậy (D1–D27). |
+| [Nhật ký quyết định](../decisions.md) | Vì sao mọi thứ đang như vậy (D1–D29). |
 | [Sổ tay đầy đủ (PDF)](so_tay_ban_giao.pdf) | Kiến thức nền, runbook chi tiết, lỗi thường gặp, thuật ngữ. |
 
 Thứ tự ưu tiên khi các tài liệu khác nhau: **spec > RUNBOOK > sổ tay**.
@@ -18,25 +18,28 @@ Thứ tự ưu tiên khi các tài liệu khác nhau: **spec > RUNBOOK > sổ ta
 
 ## 1. Trạng thái lúc bàn giao (2026-11-13)
 
-- Pipeline đã viết xong. 75 kiểm thử CPU qua (`pytest -q` trong `code/`, cần có torch; thiếu torch thì vài test bị skip).
+- Pipeline đã viết xong. 79 kiểm thử CPU qua (`pytest -q` trong `code/`, cần có torch; thiếu torch thì vài test bị skip).
 - Phần GPU (transformers, peft, ultralytics, torchxrayvision) **mới chỉ được kiểm tra cú pháp**. Phiên GPU đầu tiên **phải** chạy 7 mục "Kiểm tra bắt buộc trên Colab" trong RUNBOOK trước E1–E5.
-- Chưa tải bộ dữ liệu nào. Chưa chạy thí nghiệm nào. Báo cáo còn ô đỏ `[--]` cho E0–E5.
+- **E0 dữ liệu đã xong (2026-11-13, bản `v0.2.0`):** VinBigData 15.000 ảnh (826 dương), NIH 656 ảnh (164 dương), JSRT 247 ảnh (154 dương). `data/processed/` (4,9 GB) nằm trên Google Drive của chủ repo, không có trong git. Số liệu: [`docs/decisions.md`](../decisions.md) D29.
+- Chưa chạy E1–E5. Báo cáo còn ô đỏ `[--]`.
+- **Danh sách việc còn lại và trạng thái từng việc:** đầu [`code/RUNBOOK.md`](../../code/RUNBOOK.md), mục "Trạng thái và việc cần làm".
 
 ## 2. Bắt đầu nhanh
 
-1. Nhận lời mời vào repo private `minhdang900/uit-cs315-lung-nodule-cxr-vlm`.
-2. Clone repo **một lần** vào `/content/drive/MyDrive` theo RUNBOOK §0 (bước "Lần đầu tiên"; repo private nên cần GitHub token hoặc `gh auth login`). Mỗi phiên đặt `REPO = "/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm"` rồi `%cd {REPO}/code`. Clone chỗ khác thì chỉ đổi `REPO`.
+1. Repo **public**: `minhdang900/uit-cs315-lung-nodule-cxr-vlm`. Clone không cần token. Muốn push lên repo gốc thì xin chủ repo mời làm collaborator (hoặc fork rồi mở PR).
+2. Clone repo **một lần** vào `/content/drive/MyDrive` theo RUNBOOK §0 (bước "Lần đầu tiên"). Mỗi phiên đặt `REPO = "/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm"` rồi `%cd {REPO}/code`. Clone chỗ khác thì chỉ đổi `REPO`.
+   Dữ liệu: xin GVHD chia sẻ thư mục dữ liệu trên Drive, thêm lối tắt tên `cs315-data` vào `My Drive`; mỗi phiên đặt `DATA = "/content/drive/MyDrive/cs315-data"`.
 3. Trên máy cá nhân:
    ```bash
    cd code
    python3 -m venv .venv && source .venv/bin/activate
-   pip install -e ".[dev]"          # them ",torchcpu" de chay du 75 test
+   pip install -e ".[dev]"          # them ",torchcpu" de chay du 79 test
    pytest -q
    ```
 4. Xin quyền `google/medgemma-4b-it` trên Hugging Face (chấp nhận điều khoản Health AI Developer Foundations). Tạo token. Lưu vào **Colab Secrets** tên `HF_TOKEN`. Không dán token vào notebook hay commit.
 5. Colab Pro với GPU **L4 hoặc A100**. **Không dùng T4** (MedGemma cần bf16 thật; code sẽ báo `RuntimeError`).
-6. Đọc điều khoản và tải dữ liệu (xem mục 5). Dữ liệu chỉ dùng cho nghiên cứu, **không phân phối lại**.
-7. Chạy E0 → 7 kiểm tra bắt buộc → E1–E3 → `make_report.py` → chọn cấu hình trên val → E4, E5 → điền báo cáo.
+6. Đọc điều khoản dữ liệu (xem mục 5). Dữ liệu chỉ dùng cho nghiên cứu, **không phân phối lại**. Chỉ tự tải khi không được chia sẻ thư mục Drive.
+7. Chạy `data_stats.py` (tạo `$O/e0_data_edges.json`) → 7 kiểm tra bắt buộc → E1–E3 → `make_report.py` → chọn cấu hình trên val → E4, E5 → điền báo cáo.
 
 ## 3. Kiến trúc
 
@@ -84,7 +87,7 @@ data/                 raw/ + processed/, gitignore (tru data/README.md)
 outputs/              gitignore - ket qua chay (tao khi chay)
 ```
 
-Lệnh RUNBOOK chạy từ `code/`: `M=../data/processed`, `D=/content/data` (ổ local Colab), `O=../outputs`.
+Lệnh RUNBOOK chạy từ `code/`: `M=/content/data` (manifest), `D=/content/data` (ảnh; cả hai ở ổ local Colab sau `rsync`), `O=../outputs`.
 
 ## 4. Cấu hình và thí nghiệm
 
@@ -148,13 +151,13 @@ Dữ liệu thô để trong `data/raw/` (gợi ý `data/raw/vinbig/`, `nih/`, `
 
 VinBigData chia theo `image_id` (70/10/20, phân tầng theo nhãn), **không** theo bệnh nhân (bản Kaggle không có mã bệnh nhân): rủi ro rò rỉ, phải nêu thành hạn chế (D9).
 
-Chưa kiểm chứng: tên bộ PNG cụ thể trên Kaggle; định dạng file nhãn test VinDr-CXR. Xem hộp "Chưa kiểm chứng được" trong sổ tay PDF §6.5.
+Đã kiểm chứng (E0): bộ PNG Kaggle `xhlulu/vinbigdata-chest-xray-resized-png-1024x1024` (`train_meta.csv` có `dim0`/`dim1` là kích thước gốc). Chưa kiểm chứng: định dạng file nhãn test VinDr-CXR (không dùng).
 
 ## 6. Runbook
 
 Mọi lệnh: [`code/RUNBOOK.md`](../../code/RUNBOOK.md). Sổ tay PDF §6 giải thích từng lệnh, kết quả mong đợi, cách kiểm tra và lỗi thường gặp. Tóm tắt:
 
-- **§0 mỗi phiên Colab:** mount Drive, đặt `REPO`, `%cd {REPO}/code`, nạp `HF_TOKEN`, `pip install -q -e ".[gpu]"`, `rsync` ảnh sang `/content/data`. Mỗi ô lệnh là `%%bash` bắt đầu bằng `export M=../data/processed D=/content/data O=../outputs`.
+- **§0 mỗi phiên Colab:** mount Drive, đặt `REPO` và `DATA`, `%cd {REPO}/code`, nạp `HF_TOKEN`, `pip install -q -e ".[gpu]"`, `rsync` `{DATA}/processed/` sang `/content/data`. Mỗi ô lệnh là `%%bash` bắt đầu bằng `export M=/content/data D=/content/data O=../outputs`.
 - **7 kiểm tra bắt buộc:** tokenizer yes/no; `build_example`; loss pilot 160 mẫu (0,5–3, không phải 10–25); GPU capability ≥ 8; smoke YOLO; tốc độ mặt nạ phổi; tốc độ VLM. Mục nào hỏng thì dừng.
 - **E0–E5:** chép nguyên lệnh trong RUNBOOK. `predict_vlm.py` tự chạy tiếp khi Colab ngắt; các script huấn luyện thì không.
 - **Ngân sách:** lượt nào vượt 3 giờ thì cắt theo thứ tự: `--neg-per-pos 2` → (chỉ Qwen) giảm độ phân giải → `--epochs 2` → C1 chỉ 1 seed. Ghi vào `outputs/budget.md` và `docs/decisions.md`.
