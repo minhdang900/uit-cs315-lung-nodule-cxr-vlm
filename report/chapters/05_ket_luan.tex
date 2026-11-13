@@ -1,0 +1,52 @@
+% ============================================================================
+%  CHƯƠNG 5. KẾT LUẬN, HẠN CHẾ VÀ HƯỚNG PHÁT TRIỂN
+% ============================================================================
+\clearpage
+\section{Kết luận, hạn chế và hướng phát triển}
+\label{sec:conclusion}
+
+\subsection{Kết luận}
+
+\textcolor{badred}{[Điền sau E1--E5: trả lời Q1 (LoRA có đạt sens@spec0,90 $\ge 0{,}60$ trên VinBigData test
+không) và Q2 (cải thiện có còn trên JSRT và khi che nốt không), theo cả hai hướng có thể xảy ra.]}
+
+Dù kết quả theo hướng nào, đồ án sẽ đóng góp một benchmark có kiểm soát cho VLM trên bài toán nốt phổi, một
+phân tích định lượng về chế độ báo bình thường khi tinh chỉnh với lớp dương hiếm, và một quy trình kiểm toán
+``nhìn đúng chỗ'' dùng được cho các trợ lý đọc ảnh khác.
+
+\subsection{Hạn chế}
+
+\begin{itemize}
+  \item \textbf{Nhãn có nhiễu:} nhãn NIH rút từ báo cáo; nhãn VinBigData có bất đồng giữa các bác sĩ.
+  \item \textbf{Cỡ mẫu nhỏ:} khoảng 82 ảnh dương ở tập test VinBigData, nên khoảng tin cậy rộng.
+  \item \textbf{Bootstrap theo ảnh, không gộp theo bệnh nhân:} nếu một bệnh nhân có nhiều ảnh, khoảng tin cậy có
+        thể hẹp hơn thực tế.
+  \item \textbf{Chia VinBigData theo ảnh:} bản Kaggle không có mã bệnh nhân, nên ảnh của cùng một bệnh nhân (nếu
+        có) có thể nằm ở cả train và test, làm kết quả trong phân phối lạc quan hơn.
+  \item \textbf{Thiếu kích thước thật:} VinBigData không có kích thước nốt tính bằng mm; chỉ JSRT có.
+  \item \textbf{Ngoài phân phối mạnh:} JSRT là phim scan cũ.
+  \item \textbf{Mô hình cỡ nhỏ}, bộ mã hoá ảnh đông cứng; kết luận không tự động mở rộng sang VLM lớn.
+  \item \textbf{Không có mô bệnh học:} trợ lý phát hiện nốt/khối, không phân biệt lành/ác (trừ phân tích phụ trên JSRT).
+  \item \textbf{Rò rỉ dữ liệu:} MIMIC-CXR, VinDr-CXR và NIH được tái dùng rộng rãi để huấn luyện
+        VLM~\cite{johnson2019mimic,nguyen2025vindrvqa}, nên kết quả zero-shot trên các tập này có thể bị thổi phồng.
+        JSRT ít bị dùng hơn nhưng không đảm bảo hoàn toàn.
+\end{itemize}
+
+\subsection{An toàn và đạo đức}
+
+Một trợ lý yếu nhưng trả lời tự tin có thể kéo người đọc theo hướng sai~\cite{bernstein2023incorrect,lee2023humanai}.
+Vì vậy kiểm toán ``nhìn đúng chỗ'' có ý nghĩa an toàn, không chỉ học thuật. \textbf{Trợ lý trong đồ án là nguyên
+mẫu nghiên cứu, không dùng cho quyết định lâm sàng} và không được trình bày như công cụ sẵn sàng triển khai. Đồ
+án chỉ dùng dữ liệu công khai đã ẩn danh và không phân phối lại ảnh.
+
+\subsection{Hướng phát triển}
+
+\begin{itemize}
+  \item \textbf{VLM có hỗ trợ vùng (C5):} detector đề xuất vùng, VLM xác nhận và giải thích, theo kiểu agent
+        MedRAX~\cite{fallahpour2025medrax}.
+  \item \textbf{Từ phát hiện đến báo cáo và theo dõi:} sinh câu mô tả nốt (vị trí, kích thước, tính chất) và gợi ý
+        chụp CT theo guideline Fleischner, có RAG; các LLM hiện vẫn áp guideline chưa đáng tin cậy~\cite{gamble2024fleischner}.
+  \item \textbf{Nguy cơ ung thư đa phương thức:} kết hợp CXR với dữ liệu lâm sàng, so với CXR-LC~\cite{lu2020cxrlc}.
+  \item \textbf{Câu hỏi mở:} bộ mã hoá ảnh đông cứng có phải nút thắt không? Cần thí nghiệm mở khoá một phần bộ mã
+        hoá, hoặc probe patch-local trên mô hình sau LoRA.
+\end{itemize}
