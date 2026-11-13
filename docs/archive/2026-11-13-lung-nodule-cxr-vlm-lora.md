@@ -80,7 +80,6 @@ Phần logic thuần (nhãn, chia tập, parser, metric, thống kê, che vùng,
 **Vận hành**
 - Ngân sách: nếu một lượt MedGemma-4B vượt 3 giờ, cắt theo thứ tự: giảm số ảnh âm (giữ toàn bộ ảnh dương) → giảm độ phân giải → còn 2 epoch → C1 còn 1 seed.
 - Không phân phối lại ảnh. Chỉ bàn giao nhãn và dự đoán.
-- Mọi commit kết thúc bằng dòng `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Quy ước dùng chung (khóa từ đầu)
 
@@ -223,7 +222,7 @@ Kỳ vọng: `1 passed`.
 
 ```bash
 git add -A
-git commit -m "chore: scaffold nodulecxr package" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "chore: scaffold nodulecxr package"
 ```
 
 ---
@@ -373,7 +372,7 @@ Kỳ vọng: `3 passed`.
 
 ```bash
 git add src/nodulecxr/records.py tests/test_records.py
-git commit -m "feat: manifest and jsonl io" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: manifest and jsonl io"
 ```
 
 ---
@@ -566,7 +565,7 @@ Kỳ vọng: `6 passed`.
 
 ```bash
 git add src/nodulecxr/data/vinbig.py src/nodulecxr/data/split.py tests/test_vinbig.py tests/test_split.py
-git commit -m "feat: vinbig labels with WBF and stratified split" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: vinbig labels with WBF and stratified split"
 ```
 
 ---
@@ -685,7 +684,7 @@ Kỳ vọng: `4 passed`.
 
 ```bash
 git add src/nodulecxr/images.py tests/test_images.py
-git commit -m "feat: image io and normalisation" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: image io and normalisation"
 ```
 
 ---
@@ -902,7 +901,7 @@ Kỳ vọng: `3 passed`.
 
 ```bash
 git add src/nodulecxr/data/jsrt.py src/nodulecxr/data/nih.py src/nodulecxr/strata.py tests/test_jsrt.py tests/test_nih.py tests/test_strata.py
-git commit -m "feat: jsrt and nih manifests, size strata" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: jsrt and nih manifests, size strata"
 ```
 
 ---
@@ -1231,7 +1230,7 @@ Nếu box VinBigData bị lệch, nghĩa là bản PNG giữ tỷ lệ khung hì
 
 ```bash
 git add src/nodulecxr/data/stats.py scripts/prepare_*.py scripts/draw_boxes.py scripts/data_stats.py tests/test_stats.py
-git commit -m "feat: data preparation scripts and E0 stats" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: data preparation scripts and E0 stats"
 ```
 
 ---
@@ -1379,7 +1378,7 @@ Chạy: `pytest tests/test_prompts.py -q`. Kỳ vọng: `5 passed`.
 
 ```bash
 git add src/nodulecxr/prompts.py tests/test_prompts.py
-git commit -m "feat: prompts, targets and answer parser" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: prompts, targets and answer parser"
 ```
 
 ---
@@ -1513,7 +1512,7 @@ Chạy: `pytest tests/test_detection.py -q`. Kỳ vọng: `3 passed`.
 
 ```bash
 git add src/nodulecxr/metrics/detection.py tests/test_detection.py
-git commit -m "feat: detection and calibration metrics" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: detection and calibration metrics"
 ```
 
 ---
@@ -1659,7 +1658,7 @@ Chạy: `pytest tests/test_stats_tests.py -q`. Kỳ vọng: `4 passed`.
 
 ```bash
 git add src/nodulecxr/metrics/stats.py tests/test_stats_tests.py
-git commit -m "feat: bootstrap CI, McNemar, DeLong, Holm" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: bootstrap CI, McNemar, DeLong, Holm"
 ```
 
 ---
@@ -1795,7 +1794,7 @@ Chạy: `pytest tests/test_localization.py -q`. Kỳ vọng: `3 passed`.
 
 ```bash
 git add src/nodulecxr/metrics/localization.py tests/test_localization.py
-git commit -m "feat: localisation metrics and FROC" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: localisation metrics and FROC"
 ```
 
 ---
@@ -1923,7 +1922,7 @@ Chạy: `pytest tests/test_occlusion.py -q`. Kỳ vọng: `3 passed`.
 
 ```bash
 git add src/nodulecxr/audit/occlusion.py tests/test_occlusion.py
-git commit -m "feat: occlusion audit utilities" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: occlusion audit utilities"
 ```
 
 ---
@@ -2233,7 +2232,7 @@ Lặp lại với `--model qwen`.
 
 ```bash
 git add src/nodulecxr/vlm scripts/predict_vlm.py tests/test_vlm.py
-git commit -m "feat: VLM wrappers, yes-probability scoring and prediction script" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: VLM wrappers, yes-probability scoring and prediction script"
 ```
 
 ---
@@ -2457,7 +2456,7 @@ Chạy: `pytest tests/test_train.py -q`. Kỳ vọng: `4 passed`.
 
 ```bash
 git add src/nodulecxr/train tests/test_train.py
-git commit -m "feat: SFT examples, collator, weighted loss and LoRA config" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: SFT examples, collator, weighted loss and LoRA config"
 ```
 
 ---
@@ -2586,7 +2585,7 @@ Huấn luyện C3 với `--pos-weight 1.0` và `--pos-weight 2.0` (seed 0). Ch�
 
 ```bash
 git add scripts/train_lora.py
-git commit -m "feat: LoRA training script with timing" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: LoRA training script with timing"
 ```
 
 ---
@@ -2747,7 +2746,7 @@ Chạy:
 
 ```bash
 git add src/nodulecxr/baselines/densenet.py scripts/train_densenet.py tests/test_densenet.py
-git commit -m "feat: B1 DenseNet-121 baseline" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: B1 DenseNet-121 baseline"
 ```
 
 ---
@@ -2903,7 +2902,7 @@ if __name__ == "__main__":
 
 ```bash
 git add src/nodulecxr/baselines/yolo.py scripts/train_yolo.py tests/test_yolo.py
-git commit -m "feat: B2 YOLOv8 baseline" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: B2 YOLOv8 baseline"
 ```
 
 ---
@@ -3092,7 +3091,7 @@ Chạy: `pytest tests/test_audit_run.py -q`. Kỳ vọng: `1 passed`.
 
 ```bash
 git add src/nodulecxr/audit/run.py scripts/run_audit.py tests/test_audit_run.py
-git commit -m "feat: E5 occlusion audit" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: E5 occlusion audit"
 ```
 
 ---
@@ -3412,7 +3411,7 @@ Chạy toàn bộ: `pytest -q`. Kỳ vọng: tất cả pass.
 
 ```bash
 git add src/nodulecxr/eval/report.py scripts/make_report.py tests/test_report.py
-git commit -m "feat: benchmark report with CIs, strata and paired tests" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "feat: benchmark report with CIs, strata and paired tests"
 ```
 
 ---
@@ -3513,7 +3512,7 @@ Kỳ vọng: không có dòng `FAIL`. Sau đó đối chiếu từng cờ trong 
 
 ```bash
 git add RUNBOOK.md
-git commit -m "docs: Colab runbook for E0-E5" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+git commit -m "docs: Colab runbook for E0-E5"
 ```
 
 ---
