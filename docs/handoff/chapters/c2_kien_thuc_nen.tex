@@ -1,0 +1,577 @@
+\section{Kiến thức nền}
+\label{sec:background}
+
+Chương này giải thích mọi khái niệm bạn cần trước khi chạy lệnh. Mỗi mục trả lời ba câu: nó là gì,
+vì sao đồ án cần nó, và trong code nó nằm ở đâu.
+
+% ---------------------------------------------------------------------------
+\subsection{X-quang ngực, nốt phổi và khối}
+\label{sec:cxr}
+
+\textbf{X-quang ngực} \en{chest X-ray, CXR} là ảnh xám 2 chiều. Tia X đi qua lồng ngực. Mô đặc (xương, tim, khối u)
+cản tia nhiều nên hiện màu sáng. Phổi chứa khí nên hiện màu tối.
+
+\begin{itemize}
+\item \textbf{Nốt phổi} \en{lung nodule}: đốm tròn, đường kính $\le 3$ cm.
+\item \textbf{Khối} \en{mass}: tổn thương $> 3$ cm.
+\item Đồ án \textbf{gộp} hai loại thành một lớp dương ``Nodule/Mass'' (quyết định ngày 2026-11-12).
+\item \textbf{Độ mờ} \en{subtlety}: nốt khó thấy đến mức nào. Bộ JSRT chấm từ 1 (rất khó thấy) đến 5 (rõ).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.9]
+  \fill[black!85] (-3.2,-2.6) rectangle (3.2,2.4);
+  % phổi
+  \fill[black!55] (-0.35,2.0) .. controls (-2.6,1.9) and (-2.9,-0.5) .. (-2.6,-2.2) -- (-0.5,-2.0) .. controls (-0.3,-0.5) .. cycle;
+  \fill[black!55] (0.35,2.0) .. controls (2.6,1.9) and (2.9,-0.5) .. (2.6,-2.2) -- (0.6,-2.0) .. controls (0.9,-1.0) and (0.4,-0.3) .. cycle;
+  % tim
+  \fill[black!25] (-0.3,0.4) .. controls (1.6,0.2) and (1.6,-2.0) .. (0.0,-2.1) .. controls (-0.7,-1.5) .. cycle;
+  % nốt và khối
+  \fill[black!10] (-1.5,0.8) circle (0.17);
+  \draw[okgreen,very thick] (-1.75,0.55) rectangle (-1.25,1.05);
+  \fill[black!15] (1.75,-0.5) circle (0.55);
+  \draw[warnorange,very thick] (1.1,-1.15) rectangle (2.4,0.15);
+  \node[okgreen,font=\scriptsize\bfseries,anchor=east] at (-3.3,0.8) {nốt ($\le$3 cm)};
+  \draw[okgreen,thick] (-3.3,0.8) -- (-1.75,0.8);
+  \node[warnorange,font=\scriptsize\bfseries,anchor=west] at (3.3,-0.5) {khối ($>$3 cm)};
+  \draw[warnorange,thick] (3.3,-0.5) -- (2.4,-0.5);
+  \node[white,font=\scriptsize] at (0,2.15) {khí quản / trung thất};
+  \node[white,font=\scriptsize] at (0.6,-1.2) {tim};
+  \node[white,font=\scriptsize] at (-1.6,-1.4) {phổi};
+\end{tikzpicture}
+\caption{Sơ đồ X-quang ngực (minh họa, không phải ảnh thật). Khung màu là bounding box, tức nhãn vị trí.}
+\label{fig:cxr}
+\end{figure}
+
+\textbf{Vì sao khó?} Nốt nhỏ có thể chỉ chiếm vài chục pixel trên ảnh 896$\times$896. Nốt có thể nằm sau xương sườn hoặc tim.
+Và ca dương rất hiếm: trong tập train VinBigData chỉ khoảng 2,73\% ảnh có Nodule/Mass (spec §6).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[xbar stacked, width=11cm, height=2.6cm, ymin=-0.5, ymax=0.5, xmin=0, xmax=100, ytick=\empty,
+  xlabel={\% ảnh trong tập train VinBigData (theo spec §6, ước tính 410/15.000)},
+  xlabel style={font=\scriptsize}, tick label style={font=\scriptsize}, bar width=0.5cm,
+  legend style={font=\scriptsize,at={(0.5,1.25)},anchor=south,legend columns=2,draw=none}]
+\addplot[fill=badred,draw=none] coordinates {(2.73,0)};
+\addplot[fill=black!20,draw=none] coordinates {(97.27,0)};
+\legend{{Nodule/Mass (2{,}73\%)},{không có Nodule/Mass (97{,}27\%)}}
+\end{axis}
+\end{tikzpicture}
+\caption{Mất cân bằng lớp \en{class imbalance}: ca dương rất hiếm.}
+\label{fig:imbalance}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\subsection{CNN phân loại và CNN phát hiện}
+\label{sec:cnn}
+
+\textbf{Mạng tích chập} \en{convolutional neural network, CNN} là mạng học đặc trưng ảnh bằng các bộ lọc trượt.
+Đồ án dùng hai baseline CNN:
+
+\begin{itemize}
+\item \textbf{B1 -- bộ phân loại} \en{classifier}: DenseNet-121 đã tiền huấn luyện trên X-quang (thư viện \code{torchxrayvision}).
+      Đầu ra là \emph{một} xác suất cho cả ảnh: ``có nốt'' bao nhiêu phần trăm. Không có vị trí.
+\item \textbf{B2 -- bộ phát hiện} \en{detector}: YOLOv8. Đầu ra là \emph{nhiều} box, mỗi box có điểm tin cậy.
+      Điểm của ảnh = điểm box cao nhất (\code{baselines/yolo.py}).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.4cm and 0.5cm]
+\node[box,minimum width=1.7cm] (i1) {ảnh};
+\node[gbox,right=of i1,minimum width=2.6cm] (d) {DenseNet-121\\(B1)};
+\node[file,right=of d,minimum width=2.4cm] (o1) {score = 0.83};
+\node[lab,right=0.2cm of o1] {một số cho cả ảnh};
+\node[box,below=0.8cm of i1,minimum width=1.7cm] (i2) {ảnh};
+\node[obox,right=of i2,minimum width=2.6cm] (y) {YOLOv8\\(B2)};
+\node[file,right=of y,minimum width=2.6cm,text width=2.6cm] (o2) {[x1,y1,x2,y2,0.91]\\{}[x1,y1,x2,y2,0.12]\\\ldots};
+\node[lab,right=0.2cm of o2] {nhiều box + điểm;\\điểm ảnh = max};
+\draw[arr] (i1)--(d); \draw[arr] (d)--(o1); \draw[arr] (i2)--(y); \draw[arr] (y)--(o2);
+\end{tikzpicture}
+\caption{Bộ phân loại cho một xác suất; bộ phát hiện cho danh sách box.}
+\label{fig:cls-det}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\subsection{Mô hình ngôn ngữ--thị giác (VLM)}
+\label{sec:vlm}
+
+\textbf{Mô hình ngôn ngữ lớn} \en{large language model, LLM} đoán từ tiếp theo dựa trên các từ trước. Văn bản được cắt thành
+\textbf{token} (mẩu từ). \textbf{VLM} gắn thêm một \textbf{bộ mã hóa ảnh} \en{image encoder} vào LLM:
+
+\begin{enumerate}
+\item Bộ mã hóa ảnh (thường là ViT, \en{Vision Transformer}) biến ảnh thành một dãy vector.
+      MedGemma dùng MedSigLIP; ảnh luôn được đưa về 896$\times$896.
+\item Một \textbf{lớp chiếu} \en{projector} đổi các vector đó về cùng ``ngôn ngữ'' với token chữ.
+\item LLM đọc token ảnh + token câu hỏi, rồi sinh câu trả lời từng token một.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.45cm and 0.55cm]
+\node[box,minimum width=1.7cm,minimum height=1.4cm] (img) {ảnh\\896$\times$896};
+\node[rbox,right=of img,minimum width=2.2cm,minimum height=1.4cm] (enc) {Bộ mã hóa ảnh\\(ViT, \textbf{đông cứng})};
+\node[rbox,right=of enc,minimum width=1.6cm,minimum height=1.4cm] (proj) {Lớp chiếu};
+\node[gbox,right=0.9cm of proj,minimum width=3.0cm,minimum height=2.6cm,yshift=-0.6cm] (llm) {LLM\\(Gemma 3 / Qwen2.5)\\[3pt]\textbf{+ LoRA}\\(chỉ phần này\\được huấn luyện)};
+\node[box,below=1.0cm of enc,minimum width=4.2cm] (txt) {câu hỏi $\rightarrow$ token chữ};
+\node[file,right=0.6cm of llm,text width=2.2cm] (ans) {\{"nodule":\\ "yes", "boxes":\\ {}[[\ldots]]\}};
+\draw[arr] (img)--(enc); \draw[arr] (enc)--(proj);
+\draw[arr] (proj.east) -- ++(0.45,0) |- ([yshift=0.6cm]llm.west);
+\draw[arr] (txt.east) -| ([xshift=-0.45cm,yshift=-0.6cm]llm.west) -- ([yshift=-0.6cm]llm.west);
+\draw[arr] (llm)--(ans);
+\node[lab,above=0.05cm of enc] {token ảnh};
+\end{tikzpicture}
+\caption{Cấu trúc VLM. Trong đồ án, bộ mã hóa ảnh và lớp chiếu bị đông cứng; LoRA chỉ gắn vào các lớp attention và MLP của LLM
+(xem \code{LORA\_TARGET\_REGEX} trong \code{train/sft\_data.py}).}
+\label{fig:vlm}
+\end{figure}
+
+Hai VLM trong đồ án:
+\begin{itemize}
+\item \textbf{MedGemma-4B-it} (\code{google/medgemma-4b-it}): mô hình y khoa của Google. Là VLM chính. Phải chấp nhận điều khoản trên Hugging Face.
+\item \textbf{Qwen2.5-VL-3B-Instruct} (\code{Qwen/Qwen2.5-VL-3B-Instruct}): mô hình đa năng, vốn biết xuất tọa độ box. Dùng để so ``y khoa vs đa năng''.
+\end{itemize}
+
+\textbf{Điểm liên tục từ VLM.} VLM trả lời bằng chữ, nhưng để vẽ ROC ta cần một \emph{điểm số} liên tục.
+Code (\code{vlm/hf.py}, hàm \code{yes\_probability}) làm như sau: ép mô hình đọc hai câu trả lời mở đầu
+\code{\{"nodule": "yes} và \code{\{"nodule": "no}, tính log-xác suất của phần khác nhau, rồi chuẩn hóa thành
+$P(\text{yes}) \in [0,1]$ (spec §8.5).
+
+% ---------------------------------------------------------------------------
+\subsection{Tinh chỉnh toàn phần và LoRA}
+\label{sec:lora}
+
+\textbf{Tinh chỉnh} \en{fine-tuning} là huấn luyện tiếp một mô hình đã có trên dữ liệu mới.
+\textbf{Tinh chỉnh toàn phần} \en{full fine-tuning} cập nhật mọi trọng số. Với mô hình 4 tỷ tham số, cách này cần rất nhiều bộ nhớ GPU.
+
+\textbf{LoRA} \en{Low-Rank Adaptation, thích ứng hạng thấp} giữ nguyên ma trận trọng số gốc $W$ (kích thước $d \times k$) và học thêm
+hai ma trận nhỏ $B$ ($d \times r$) và $A$ ($r \times k$), với $r$ rất nhỏ:
+\[
+  W' = W + \frac{\alpha}{r}\, B A .
+\]
+Đồ án dùng $r = 16$, $\alpha = 32$, dropout 0,05 (\code{train/lora.py}). Số tham số học chỉ là $r(d+k)$ thay vì $d \cdot k$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\draw[black!60,fill=black!8] (0,0) rectangle (3,3);
+\node[align=center] at (1.5,1.5) {$W$\\$d\times k$\\\small(đông cứng)};
+\node[font=\Large] at (3.5,1.5) {$+$};
+\draw[okgreen,fill=softgreen] (4.0,0) rectangle (4.6,3);
+\node at (4.3,1.5) {$B$};
+\node[font=\scriptsize] at (4.3,-0.25) {$d\times r$};
+\draw[okgreen,fill=softgreen] (4.9,2.4) rectangle (7.9,3.0);
+\node at (6.4,2.7) {$A$};
+\node[font=\scriptsize] at (6.4,3.25) {$r\times k$};
+\node[align=left,font=\small] at (6.4,1.35) {$r = 16 \ll d,k$\\học được: $B$, $A$\\giữ nguyên: $W$};
+\node[font=\scriptsize,align=center] at (1.5,-0.7) {ví dụ $d=k=2560$:\\$d\cdot k \approx 6{,}6$ triệu};
+\node[font=\scriptsize,align=center] at (7.0,-0.8) {$r(d+k) = 16\cdot 5120 \approx 82$ nghìn\\(khoảng 1,2\% của $W$)};
+\end{tikzpicture}
+\caption{LoRA: thêm tích $BA$ hạng thấp vào ma trận trọng số đông cứng $W$. Con số $d$ chỉ để minh họa.}
+\label{fig:lora}
+\end{figure}
+
+Sau huấn luyện, chỉ lưu $A$, $B$ (gọi là \textbf{adapter}) vào thư mục \code{final/}. Lúc dự đoán, ta tải mô hình gốc rồi
+gắn adapter (cờ \code{--adapter}).
+
+% ---------------------------------------------------------------------------
+\subsection{Tinh chỉnh có giám sát (SFT) và che loss}
+\label{sec:sft}
+
+\textbf{SFT} \en{supervised fine-tuning} dạy mô hình bằng cặp (câu hỏi, đáp án mẫu). Mô hình học dự đoán từng token của đáp án.
+Loss là \textbf{cross-entropy} \en{entropy chéo} trên từng token.
+
+\textbf{Che loss} \en{loss masking}: ta chỉ muốn mô hình học \emph{trả lời}, không học lặp lại câu hỏi. Vì vậy mọi token của phần
+câu hỏi (và token ảnh) có nhãn $-100$, nghĩa là ``bỏ qua khi tính loss'' (\code{build\_example} trong \code{train/sft\_data.py}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[tok/.style={draw=black!40,minimum height=0.6cm,font=\scriptsize\ttfamily,inner sep=2pt}]
+\node[tok,fill=black!12,minimum width=1.0cm] at (1.05,0) {<img>};
+\node[tok,fill=black!12,minimum width=1.0cm] at (2.10,0) {<img>};
+\node[tok,fill=black!12,minimum width=1.0cm] at (3.15,0) {\ldots};
+\node[tok,fill=black!12,minimum width=1.0cm] at (4.20,0) {Is};
+\node[tok,fill=black!12,minimum width=1.0cm] at (5.25,0) {there};
+\node[tok,fill=black!12,minimum width=1.0cm] at (6.30,0) {\ldots};
+\node[tok,fill=black!12,minimum width=1.0cm] at (7.35,0) {JSON.};
+\node[tok,fill=softgreen,draw=okgreen,minimum width=1.55cm] at (9.35,0) {\{\textquotedbl nodule\textquotedbl:};
+\node[tok,fill=softgreen,draw=okgreen,minimum width=1.55cm] at (10.95,0) {\textquotedbl yes\textquotedbl,};
+\node[tok,fill=softgreen,draw=okgreen,minimum width=1.55cm] at (12.55,0) {\textquotedbl boxes\textquotedbl:};
+\node[tok,fill=softgreen,draw=okgreen,minimum width=1.55cm] at (14.15,0) {[[412,\ldots]]\}};
+\draw[decorate,decoration={brace,mirror,amplitude=5pt}] (0.5,-0.45) -- (7.9,-0.45) node[midway,below=6pt,font=\scriptsize,align=center] {ảnh + câu hỏi: nhãn $= -100$\\(không tính loss)};
+\draw[decorate,decoration={brace,mirror,amplitude=5pt}] (8.55,-0.45) -- (15.15,-0.45) node[midway,below=6pt,font=\scriptsize,align=center] {đáp án: tính cross-entropy\\(C3: nhân trọng số $w_+$ nếu ca dương)};
+\end{tikzpicture}
+\caption{Che loss: chỉ các token của đáp án được tính loss.}
+\label{fig:mask}
+\end{figure}
+
+\textbf{Cân bằng lớp trong C3.} Ca dương hiếm, nên mô hình dễ học cách ``luôn nói no''. C3 dùng hai cách chống lại:
+\begin{enumerate}
+\item \textbf{Oversampling} \en{lấy mẫu lặp}: lặp lại ca dương cho đến khi tỷ lệ dương:âm là 1:1 (\code{oversample\_indices}, cờ \code{--balance}).
+\item \textbf{Trọng số loss}: nhân loss của \emph{mọi} token đáp án ở ca dương với $w_+$ (cờ \code{--pos-weight 2.0} trong RUNBOOK; giá trị cố định, \textbf{không} tinh chỉnh trên val).
+      Loss được chia cho tổng số token nhãn của cả cửa sổ tích lũy gradient (spec §8.5).
+\end{enumerate}
+
+\textbf{Tích lũy gradient} \en{gradient accumulation}: GPU chỉ chứa được 1 ảnh mỗi lần (batch = 1). Ta cộng gradient của 8 ảnh rồi mới
+cập nhật trọng số một lần (\code{--grad-accum 8}). Kết quả gần giống batch = 8.
+
+% ---------------------------------------------------------------------------
+\subsection{Ma trận nhầm lẫn: sensitivity, specificity, PPV, NPV}
+\label{sec:confusion}
+
+Khi đã chọn một \textbf{ngưỡng} \en{threshold} $t$, mỗi ảnh có điểm $s \ge t$ được đoán ``có nốt''. So với nhãn thật, ta có bốn ô:
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[cell/.style={minimum width=3.2cm,minimum height=1.3cm,align=center,font=\small,draw=white,line width=2pt}]
+\node[cell,fill=softgreen] (tp) at (0,0) {\textbf{TP}\\dương thật\\(bắt đúng nốt)};
+\node[cell,fill=softred] (fn) at (3.2,0) {\textbf{FN}\\âm giả\\(\textbf{bỏ sót} nốt)};
+\node[cell,fill=softorange] (fp) at (0,-1.3) {\textbf{FP}\\dương giả\\(báo nhầm)};
+\node[cell,fill=softblue] (tn) at (3.2,-1.3) {\textbf{TN}\\âm thật\\(đúng là không)};
+\node[font=\small\bfseries,above=0.1cm of tp] {Mô hình: có nốt};
+\node[font=\small\bfseries,above=0.1cm of fn] {Mô hình: không};
+\node[font=\small\bfseries,rotate=90] at (-1.9,0) {Thật: có};
+\node[font=\small\bfseries,rotate=90] at (-1.9,-1.3) {Thật: không};
+\node[right=0.7cm of fn,yshift=-0.65cm,align=left,font=\small] {
+  Sensitivity $=\dfrac{TP}{TP+FN}$\\[8pt]
+  Specificity $=\dfrac{TN}{TN+FP}$\\[8pt]
+  PPV $=\dfrac{TP}{TP+FP}$ \qquad NPV $=\dfrac{TN}{TN+FN}$};
+\end{tikzpicture}
+\caption{Ma trận nhầm lẫn \en{confusion matrix} và bốn chỉ số cơ bản (\code{binary\_metrics} trong \code{metrics/detection.py}).}
+\label{fig:confusion}
+\end{figure}
+
+\begin{itemize}
+\item \textbf{Sensitivity} \en{độ nhạy, recall}: trong các ca có nốt, mô hình bắt được bao nhiêu.
+\item \textbf{Specificity} \en{độ đặc hiệu}: trong các ca không có nốt, mô hình nói đúng ``không'' bao nhiêu.
+\item \textbf{PPV} \en{positive predictive value, precision}: khi mô hình nói ``có'', đúng bao nhiêu.
+      PPV phụ thuộc mạnh vào \textbf{tỷ lệ bệnh} \en{prevalence}. Vì vậy code báo thêm \code{ppv\_prev\_1pct}, \code{ppv\_prev\_3pct}:
+      PPV quy về tỷ lệ bệnh 1\% và 3\%. Trên JSRT (62\% ảnh có nốt), PPV không có ý nghĩa lâm sàng.
+\item \textbf{NPV}: khi mô hình nói ``không'', đúng bao nhiêu.
+\end{itemize}
+
+\textbf{Chế độ báo bình thường} thể hiện bằng: specificity $\approx 1$, sensitivity $\approx 0$. Code báo thêm
+\code{no\_on\_pos} (tỷ lệ trả lời ``no'' trên ca dương) và \code{yes\_on\_neg}.
+
+% ---------------------------------------------------------------------------
+\subsection{Đường ROC, AUC và ``sensitivity ở specificity 0,90''}
+\label{sec:roc}
+
+Nếu thay đổi ngưỡng $t$ từ cao xuống thấp, ta được nhiều cặp (sensitivity, 1 $-$ specificity). Nối lại thành
+\textbf{đường ROC} \en{receiver operating characteristic}. \textbf{AUC-ROC} \en{area under the curve} là diện tích dưới đường:
+1,0 là hoàn hảo, 0,5 là đoán bừa.
+
+\textbf{Chỉ số chính của đồ án}: sensitivity tại điểm có specificity 0,90, tức $1-\text{spec} = 0{,}10$.
+Ý nghĩa: ``nếu chỉ cho phép báo nhầm 10\% ca lành, mô hình bắt được bao nhiêu ca bệnh?''.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=8.2cm,height=7.2cm,xmin=0,xmax=1,ymin=0,ymax=1,
+  xlabel={$1-$specificity (tỷ lệ báo nhầm)},ylabel={sensitivity},
+  label style={font=\small},tick label style={font=\scriptsize},grid=major,grid style={black!10},
+  legend style={font=\scriptsize,at={(0.97,0.03)},anchor=south east}]
+\addplot[name path=roc,domain=0:1,samples=120,very thick,uitblue] {x^0.25};
+\addlegendentry{mô hình tốt (AUC $=0{,}80$)}
+\addplot[domain=0:1,samples=60,thick,warnorange] {x^0.7};
+\addlegendentry{mô hình yếu (AUC $\approx 0{,}59$)}
+\addplot[dashed,black!50] coordinates {(0,0)(1,1)};
+\addlegendentry{đoán bừa (AUC $=0{,}5$)}
+\path[name path=axis] (axis cs:0,0) -- (axis cs:1,0);
+\addplot[softblue,opacity=0.6] fill between[of=roc and axis];
+\draw[badred,thick,dashed] (axis cs:0.10,0) -- (axis cs:0.10,1);
+\draw[okgreen,thick,dotted] (axis cs:0,0.60) -- (axis cs:1,0.60);
+\fill[badred] (axis cs:0.10,0.562) circle (2.4pt);
+\node[font=\scriptsize,badred,anchor=west,align=left] at (axis cs:0.12,0.90) {spec $=0{,}90$\\sens $\approx 0{,}56$};
+\node[font=\scriptsize,okgreen,anchor=north east] at (axis cs:0.98,0.58) {mục tiêu 0,60};
+\end{axis}
+\end{tikzpicture}
+\caption{Đường ROC minh họa (số liệu giả, chỉ để giải thích). Điểm đỏ là chỉ số chính. Mô hình xanh có AUC 0,80 nhưng vẫn chưa đạt 0,60 ở spec 0,90:
+AUC cao không đảm bảo đạt mục tiêu.}
+\label{fig:roc}
+\end{figure}
+
+\textbf{AUC-PR} \en{diện tích dưới đường precision--recall}: khi lớp dương hiếm, AUC-PR nhạy hơn AUC-ROC. Code báo cả hai (\code{score\_metrics}).
+
+% ---------------------------------------------------------------------------
+\subsection{Chọn ngưỡng trên tập validation}
+\label{sec:threshold}
+
+Dữ liệu được chia ba phần: \textbf{train} (học), \textbf{validation} (chọn ngưỡng, chọn cấu hình), \textbf{test} (chấm điểm cuối, dùng một lần).
+
+Ngưỡng $t_{90}$ được chọn \textbf{trên validation}: lấy ngưỡng nhỏ nhất sao cho ít nhất 90\% ca âm trên val có điểm dưới ngưỡng
+(\code{threshold\_at\_specificity}). Sau đó áp đúng $t_{90}$ này lên các tập test. Vì vậy specificity trên test có thể khác 0,90 một chút.
+Đó là điều bình thường và trung thực.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=11cm,height=5cm,xmin=0,xmax=1,ymin=0,ymax=3.6,axis lines=left,ytick=\empty,
+  xlabel={điểm $P(\text{yes})$ của mô hình},label style={font=\small},tick label style={font=\scriptsize},
+  legend style={font=\scriptsize,draw=none,at={(0.01,0.98)},anchor=north west}]
+\addplot[name path=neg,domain=0:1,samples=150,thick,uitblue] {exp(-((x-0.3)^2)/(2*0.12^2))/(0.12*sqrt(2*pi))};
+\addlegendentry{ca âm (val)}
+\addplot[name path=pos,domain=0:1,samples=150,thick,badred] {exp(-((x-0.6)^2)/(2*0.15^2))/(0.15*sqrt(2*pi))};
+\addlegendentry{ca dương (val)}
+\path[name path=base] (axis cs:0,0) -- (axis cs:1,0);
+\addplot[uitblue!30,opacity=0.7] fill between[of=neg and base,soft clip={domain=0.454:1}];
+\addplot[badred!25,opacity=0.7] fill between[of=pos and base,soft clip={domain=0:0.454}];
+\draw[black,very thick] (axis cs:0.454,0) -- (axis cs:0.454,3.5);
+\node[font=\scriptsize,anchor=south west] at (axis cs:0.46,3.0) {$t_{90}$: 90\% ca âm nằm bên trái};
+\node[font=\scriptsize,uitblue,align=center] at (axis cs:0.56,0.3) {FP\\10\%};
+\node[font=\scriptsize,badred,align=center] at (axis cs:0.36,0.35) {FN};
+\end{axis}
+\end{tikzpicture}
+\caption{Chọn ngưỡng $t_{90}$ trên validation (minh họa). Phần xanh tô là 10\% ca âm bị báo nhầm; phần đỏ tô là ca dương bị bỏ sót.}
+\label{fig:threshold}
+\end{figure}
+
+Các ngưỡng được lưu trong \code{outputs/report/thresholds.json}, khóa có dạng \code{config|seed|run}, ví dụ \code{"C3|0|0"}.
+Mỗi khóa có \code{t90} và \code{t95}.
+
+% ---------------------------------------------------------------------------
+\subsection{IoU: box dự đoán trùng box thật bao nhiêu}
+\label{sec:iou}
+
+\textbf{IoU} \en{Intersection over Union} $=\dfrac{\text{diện tích giao}}{\text{diện tích hợp}}$. IoU $=1$ là trùng khít; $0$ là không chạm nhau.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.85]
+\begin{scope}
+\fill[softgreen] (0,0) rectangle (2.4,2.0);
+\fill[softorange,opacity=0.8] (1.2,0.8) rectangle (3.4,2.8);
+\fill[okgreen!45] (1.2,0.8) rectangle (2.4,2.0);
+\draw[okgreen,very thick] (0,0) rectangle (2.4,2.0);
+\draw[warnorange,very thick,dashed] (1.2,0.8) rectangle (3.4,2.8);
+\node[font=\scriptsize,okgreen] at (0.6,0.3) {box thật};
+\node[font=\scriptsize,warnorange] at (2.8,2.5) {dự đoán};
+\node[font=\scriptsize] at (1.8,1.4) {giao};
+\end{scope}
+\node[font=\Large] at (4.4,1.4) {$\Rightarrow$};
+\node[align=left,font=\small] at (8.4,1.4) {IoU $=\dfrac{\text{giao}}{\text{thật}+\text{dự đoán}-\text{giao}}$\\[6pt]
+ví dụ: $\dfrac{1{,}44}{4{,}8+4{,}4-1{,}44}\approx 0{,}19$ \;(\textcolor{badred}{trượt} ở ngưỡng 0,3)};
+\end{tikzpicture}
+\caption{IoU (\code{metrics/localization.py}). Đồ án coi là ``trúng'' khi IoU $\ge 0{,}3$ (nốt nhỏ), và báo thêm ở 0,5.}
+\label{fig:iou}
+\end{figure}
+
+Theo spec §8.5:
+\begin{itemize}
+\item \code{hit\_iou30}, \code{hit\_iou50}: tỷ lệ ca dương mà mô hình vừa nói ``có'' (điểm $\ge t_{90}$) \emph{vừa} có box IoU $\ge 0{,}3$ (hoặc $0{,}5$). Chỉ dùng box có điểm $\ge t_{90}$.
+\item \textbf{JSRT} chỉ có tâm và đường kính nốt. ``Trúng'' khi tâm box dự đoán (box điểm cao nhất) nằm trong bán kính nốt cộng biên 5 mm.
+      Code đổi pixel ra mm bằng $0{,}175 \times 2048 / 896 = 0{,}4$ mm/px, nên 5 mm $= 12{,}5$ px.
+\end{itemize}
+
+% ---------------------------------------------------------------------------
+\subsection{FROC: sensitivity theo số báo nhầm mỗi ảnh}
+\label{sec:froc}
+
+Bộ phát hiện có thể đưa ra nhiều box trên một ảnh. \textbf{FROC} \en{free-response ROC} vẽ: trục ngang là \emph{số box báo nhầm trung bình mỗi ảnh}
+(FP/ảnh), trục dọc là tỷ lệ nốt thật được một box trúng (IoU $\ge 0{,}3$). Code báo hai điểm \code{froc\_0.5fp} và \code{froc\_1fp}.
+FROC dùng \emph{mọi} box, không lọc theo ngưỡng.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{semilogxaxis}[width=9cm,height=5.4cm,xmin=0.125,xmax=8,ymin=0,ymax=1,log basis x=2,
+  xtick={0.125,0.25,0.5,1,2,4,8},xticklabels={{0{,}125},{0{,}25},{0{,}5},1,2,4,8},
+  xlabel={số box báo nhầm trung bình mỗi ảnh (FP/ảnh)},ylabel={sensitivity theo nốt},
+  label style={font=\small},tick label style={font=\scriptsize},grid=major,grid style={black!10}]
+\addplot[very thick,uitblue,mark=*,mark size=1.5pt] coordinates {(0.125,0.28)(0.25,0.40)(0.5,0.52)(1,0.63)(2,0.71)(4,0.77)(8,0.80)};
+\draw[badred,dashed] (axis cs:0.5,0) -- (axis cs:0.5,0.52);
+\draw[badred,dashed] (axis cs:1,0) -- (axis cs:1,0.63);
+\node[font=\scriptsize,badred,anchor=south east] at (axis cs:0.5,0.53) {froc\_0.5fp};
+\node[font=\scriptsize,badred,anchor=north west] at (axis cs:1.05,0.62) {froc\_1fp};
+\end{semilogxaxis}
+\end{tikzpicture}
+\caption{Đường FROC minh họa (số liệu giả).}
+\label{fig:froc}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\subsection{Hiệu chỉnh xác suất: ECE và Brier}
+\label{sec:calib}
+
+Một mô hình \textbf{được hiệu chỉnh tốt} \en{well-calibrated} khi nó nói ``70\%'' thì đúng khoảng 70\% số lần.
+\begin{itemize}
+\item \textbf{ECE} \en{expected calibration error}: chia điểm vào 10 khoảng, đo chênh lệch giữa điểm trung bình và tỷ lệ dương thật trong mỗi khoảng, rồi lấy trung bình có trọng số. Càng nhỏ càng tốt.
+\item \textbf{Brier score}: trung bình $(s-y)^2$. \textbf{Balanced Brier}: trung bình của Brier trên ca dương và Brier trên ca âm, để lớp hiếm không bị lấn át.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=7cm,height=6cm,xmin=0,xmax=1,ymin=0,ymax=1,ybar,bar width=0.07,
+  xlabel={điểm dự đoán (theo khoảng)},ylabel={tỷ lệ dương thật},
+  label style={font=\small},tick label style={font=\scriptsize},
+  legend style={font=\scriptsize,at={(0.03,0.97)},anchor=north west}]
+\addplot[fill=uitblue!60,draw=uitblue] coordinates {(0.05,0.02)(0.15,0.05)(0.25,0.09)(0.35,0.15)(0.45,0.22)(0.55,0.30)(0.65,0.38)(0.75,0.47)(0.85,0.58)(0.95,0.70)};
+\addlegendentry{mô hình quá tự tin}
+\addplot[sharp plot,dashed,black!60,thick] coordinates {(0,0)(1,1)};
+\addlegendentry{hiệu chỉnh hoàn hảo}
+\end{axis}
+\end{tikzpicture}
+\caption{Biểu đồ độ tin cậy \en{reliability diagram} minh họa. Cột thấp hơn đường chéo nghĩa là mô hình tự tin quá mức.}
+\label{fig:calib}
+\end{figure}
+
+% ---------------------------------------------------------------------------
+\subsection{Thống kê: bootstrap, McNemar, DeLong, Holm}
+\label{sec:stats}
+
+Tập test nhỏ (ví dụ chỉ khoảng 82 ảnh dương trên VinBigData test, theo ước tính trong spec §6). Một con số sensitivity duy nhất có thể dao động nhiều.
+Thống kê giúp trả lời: ``chênh lệch này có thật, hay do may rủi?''.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=9cm,height=4.6cm,ybar interval,ymin=0,ymax=100,xmin=0.44,xmax=0.74,ytick=\empty,axis lines=left,
+  xlabel={sensitivity tính trên 1.000 mẫu bootstrap},label style={font=\small},tick label style={font=\scriptsize},
+  xticklabel style={/pgf/number format/use comma,/pgf/number format/fixed}]
+\addplot[fill=uitblue!40,draw=uitblue] coordinates {(0.44,2)(0.47,9)(0.50,26)(0.53,55)(0.56,80)(0.59,78)(0.62,52)(0.65,25)(0.68,9)(0.71,3)(0.74,0)};
+\draw[badred,thick,dashed] (axis cs:0.49,0) -- (axis cs:0.49,85);
+\draw[badred,thick,dashed] (axis cs:0.69,0) -- (axis cs:0.69,85);
+\node[font=\scriptsize,badred,anchor=south] at (axis cs:0.59,86) {CI 95\%: phân vị 2,5\% -- 97,5\%};
+\end{axis}
+\end{tikzpicture}
+\caption{Bootstrap minh họa: lấy mẫu lại có hoàn lại nhiều lần, tính chỉ số mỗi lần; khoảng giữa phân vị 2,5\% và 97,5\% là CI 95\%.}
+\label{fig:bootstrap}
+\end{figure}
+
+\begin{description}[leftmargin=1.2em,style=nextline]
+\item[Bootstrap CI \en{khoảng tin cậy bootstrap}] Rút ngẫu nhiên có hoàn lại cùng số ảnh dương và cùng số ảnh âm (phân tầng theo nhãn), tính lại chỉ số.
+  Lặp 1.000 lần (\code{n\_boot=1000} trong \code{eval/report.py}). Lấy phân vị 2,5\% và 97,5\%.
+  \emph{Hạn chế}: lấy mẫu theo ảnh, không theo bệnh nhân, nên CI có thể hẹp hơn thực tế (spec §8.5).
+\item[McNemar] So \emph{hai mô hình trên cùng một tập ảnh} cho sensitivity (hoặc specificity). Chỉ đếm các ảnh mà hai mô hình bất đồng:
+  A đúng B sai, và A sai B đúng. Nếu hai số này chênh nhiều, khác biệt có ý nghĩa. Code dùng bản chính xác \en{exact}.
+\item[DeLong] So \emph{hai AUC} trên cùng tập ảnh, có tính tới việc hai mô hình chấm cùng ảnh nên điểm của chúng tương quan.
+\item[Holm] Khi so nhiều cặp, xác suất ``ăn may'' ít nhất một lần tăng lên. Holm điều chỉnh p-value: sắp xếp p từ nhỏ đến lớn,
+  nhân p nhỏ nhất với số phép so, p kế tiếp với (số phép so $-1$), v.v. Cột \code{*\_holm} trong \code{comparisons.csv}.
+\end{description}
+
+\begin{keybox}
+\textbf{Quy tắc đọc p-value.} p $< 0{,}05$ (sau Holm) mới được viết ``khác biệt có ý nghĩa thống kê''.
+p lớn \emph{không} chứng minh hai mô hình bằng nhau; nó chỉ nói dữ liệu chưa đủ để phân biệt.
+\end{keybox}
+
+% ---------------------------------------------------------------------------
+\subsection{Kiểm toán che vùng T1/T2/T3 và \texorpdfstring{$\Delta_{\text{occ}}$}{Delta occ}}
+\label{sec:occlusion}
+
+Mô hình có thể đoán đúng ``có nốt'' vì lý do sai, ví dụ nhìn thấy dây điện cực hay chữ đánh dấu trên phim. Phép thử che vùng
+\en{occlusion test} kiểm tra điều này (\code{audit/occlusion.py}, \code{audit/run.py}, script \code{run\_audit.py}).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.62]
+\newcommand{\lung}[1]{%
+  \fill[black!85] (#1,0) rectangle ++(3.4,3.6);
+  \fill[black!55] (#1+0.3,0.4) rectangle ++(1.2,2.8);
+  \fill[black!55] (#1+1.9,0.4) rectangle ++(1.2,2.8);}
+\lung{0}
+\fill[black!10] (0.9,2.3) circle (0.2);
+\node[font=\scriptsize,align=center] at (1.7,-0.7) {Gốc: ``yes''};
+\lung{4.8}
+\fill[black!45] (4.8+0.6,2.0) rectangle ++(0.6,0.6);
+\draw[badred,thick] (4.8+0.6,2.0) rectangle ++(0.6,0.6);
+\node[font=\scriptsize,align=center] at (6.5,-0.7) {T1: che nốt\\mong đợi $\rightarrow$ ``no''};
+\lung{9.6}
+\fill[black!10] (9.6+0.9,2.3) circle (0.2);
+\fill[black!45] (9.6+2.3,0.9) rectangle ++(0.6,0.6);
+\draw[uitblue,thick] (9.6+2.3,0.9) rectangle ++(0.6,0.6);
+\node[font=\scriptsize,align=center] at (11.3,-0.7) {T2: che chỗ khác cùng cỡ\\mong đợi: giữ ``yes''};
+\fill[black!85] (14.4,0) rectangle ++(3.4,3.6);
+\fill[black!55] (14.7,0.4) rectangle ++(1.2,2.8);
+\fill[black!55] (16.3,0.4) rectangle ++(1.2,2.8);
+\node[font=\scriptsize,align=center] at (16.1,-0.7) {T3: ảnh âm của\\bệnh nhân khác $\rightarrow$ ``no''};
+\end{tikzpicture}
+\caption{Ba phép thử. T1: che box nới 10\% bằng giá trị xám trung bình. T2: che một vùng cùng kích thước, không giao T1, $\ge 90\%$ nằm trong mặt nạ phổi.
+T3: thay bằng một ảnh âm ngẫu nhiên.}
+\label{fig:occlusion}
+\end{figure}
+
+\textbf{Tỷ lệ đổi đáp án} \en{flip rate}: trong các ca mô hình ban đầu nói ``yes'' (điểm $\ge t_{90}$), bao nhiêu \% chuyển thành ``no'' sau khi che.
+\[
+  \Delta_{\text{occ}} = \text{flip}_{T1} - \text{flip}_{T2}.
+\]
+$\Delta_{\text{occ}}$ lớn và dương nghĩa là mô hình thật sự dựa vào vùng nốt. $\Delta_{\text{occ}} \approx 0$ nghĩa là che chỗ nào cũng như nhau:
+mô hình không ``nhìn'' nốt. Hai vế tính trên \emph{cùng} các ảnh tạo được T2 (\code{n\_t2\_ok}). Trong file JSON, số cần báo cáo là \code{delta},
+kèm \code{n\_t2\_ok}. \code{flip\_t1\_all} chỉ để tham khảo.
+
+\textbf{Phân tầng} \en{stratification}: tính riêng theo kích thước nốt (VinBigData/NIH: tertile diện tích box, ngưỡng lấy từ ca dương train VinBigData;
+JSRT: $\le 10$, 10--20, $> 20$ mm) và theo độ mờ JSRT 1--5.
+
+% ---------------------------------------------------------------------------
+\subsection{Quá khớp, seed và phương sai}
+\label{sec:overfit}
+
+\textbf{Quá khớp} \en{overfitting}: mô hình học thuộc tập train, nên loss train giảm mãi nhưng kết quả trên validation xấu đi.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[width=8.5cm,height=5cm,xmin=0,xmax=10,ymin=0,ymax=1.2,axis lines=left,ytick=\empty,
+  xlabel={epoch},ylabel={loss},label style={font=\small},tick label style={font=\scriptsize},
+  legend style={font=\scriptsize,draw=none,at={(0.5,-0.32)},anchor=north,legend columns=2}]
+\addplot[very thick,uitblue,domain=0:10,samples=60] {1.0*exp(-0.35*x)+0.05};
+\addlegendentry{loss train}
+\addplot[very thick,badred,domain=0:10,samples=60] {0.9*exp(-0.5*x)+0.25+0.012*x^2};
+\addlegendentry{loss validation}
+\draw[okgreen,dashed,thick] (axis cs:3.3,0) -- (axis cs:3.3,1.1);
+\node[font=\scriptsize,okgreen,anchor=south east] at (axis cs:3.2,0.95) {điểm tốt nhất};
+\node[font=\scriptsize,anchor=west] at (axis cs:4.5,1.05) {quá khớp $\rightarrow$};
+\end{axis}
+\end{tikzpicture}
+\caption{Quá khớp (minh họa). DenseNet B1 giữ trọng số epoch có val AUC cao nhất; YOLO B2 dùng \code{best.pt}.}
+\label{fig:overfit}
+\end{figure}
+
+\textbf{Seed} là số khởi tạo bộ sinh ngẫu nhiên. Cùng code, cùng dữ liệu, khác seed có thể cho kết quả khác.
+Vì vậy mỗi cấu hình chạy 3 seed (0, 1, 2) và báo \textbf{trung bình $\pm$ độ lệch chuẩn} \en{mean $\pm$ sd}.
+Seed cũng quyết định tập ảnh âm được lấy mẫu (\code{subsample\_negatives}), thứ tự oversampling, và khởi tạo LoRA.
+Lưu ý: cách chia train/val/test của VinBigData cố định với \code{--seed 0} của \code{prepare\_vinbig.py}; seed của thí nghiệm không đổi cách chia.
+
+% ---------------------------------------------------------------------------
+\subsection{Rò rỉ dữ liệu và chia theo bệnh nhân}
+\label{sec:leakage}
+
+\textbf{Rò rỉ dữ liệu} \en{data leakage}: thông tin từ tập test lọt vào lúc huấn luyện hoặc lúc chọn mô hình. Kết quả khi đó đẹp giả tạo. Các dạng thường gặp:
+
+\begin{enumerate}
+\item \textbf{Cùng bệnh nhân ở cả train và test.} Mô hình nhận ra bệnh nhân, không phải nốt. Cách tránh: chia theo bệnh nhân \en{patient-level split}.
+\item \textbf{Nhìn tập test để chọn.} Chọn ngưỡng, epoch, cấu hình theo số trên test. Cách tránh: chỉ chọn trên validation.
+\item \textbf{Mô hình nền đã thấy dữ liệu test lúc tiền huấn luyện.} VinDr-CXR, NIH được dùng rộng rãi để huấn luyện VLM. Cách tránh: không tránh được hoàn toàn; phải nêu thành hạn chế (spec §9).
+\item \textbf{Bộ dữ liệu trùng nguồn.} NODE21 trùng nguồn với JSRT và NIH, nên không dùng làm test.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[pt/.style={circle,minimum size=0.5cm,inner sep=0,font=\scriptsize\bfseries,text=white}]
+\node[font=\small\bfseries] at (2.2,2.45) {\textcolor{badred}{Sai}: chia theo ảnh};
+\draw[rounded corners,draw=uitblue] (0,0) rectangle (2.0,1.6); \node[font=\scriptsize] at (1.0,1.85) {train};
+\draw[rounded corners,draw=warnorange] (2.4,0) rectangle (4.4,1.6); \node[font=\scriptsize] at (3.4,1.85) {test};
+\node[pt,fill=uitblue] at (0.5,1.0) {A}; \node[pt,fill=okgreen] at (1.4,0.5) {B};
+\node[pt,fill=uitblue] at (2.9,1.0) {A}; \node[pt,fill=badred] at (3.8,0.5) {C};
+\draw[badred,thick,<->] (0.75,1.0) -- (2.65,1.0);
+\node[font=\small\bfseries] at (8.2,2.45) {\textcolor{okgreen}{Đúng}: chia theo bệnh nhân};
+\draw[rounded corners,draw=uitblue] (6.0,0) rectangle (8.0,1.6); \node[font=\scriptsize] at (7.0,1.85) {train};
+\draw[rounded corners,draw=warnorange] (8.4,0) rectangle (10.4,1.6); \node[font=\scriptsize] at (9.4,1.85) {test};
+\node[pt,fill=uitblue] at (6.5,1.0) {A}; \node[pt,fill=uitblue] at (7.4,0.5) {A};
+\node[pt,fill=badred] at (8.9,1.0) {C}; \node[pt,fill=okgreen] at (9.8,0.5) {B};
+\end{tikzpicture}
+\caption{Mỗi chấm là một ảnh, chữ là mã bệnh nhân. Bên trái, ảnh của bệnh nhân A nằm cả ở train và test.}
+\label{fig:leakage}
+\end{figure}
+
+\begin{warnbox}
+\textbf{Tình trạng trong code (cần biết).}
+\begin{itemize}
+\item \textbf{VinBigData} được chia theo \code{image\_id} (70/10/20, phân tầng theo nhãn; spec §6). Đây \textbf{không} phải chia theo bệnh nhân: bản Kaggle không có mã bệnh nhân (cột \code{patient\_id} trong manifest để trống). Nếu một bệnh nhân có nhiều ảnh, ảnh của họ có thể rơi vào cả train và test. Đây là \textbf{rủi ro rò rỉ}, phải nêu thành hạn chế trong báo cáo (xem D9 trong \code{docs/decisions.md}). Đừng mô tả cách chia này là chia theo bệnh nhân.
+\item \textbf{NIH}: ảnh âm được lấy từ các bệnh nhân \emph{không} có ảnh dương (\code{data/nih.py}). NIH chỉ dùng làm test, nên không rò sang train.
+\item \textbf{JSRT}: chỉ dùng làm test.
+\item Bootstrap không gộp theo bệnh nhân, nên CI có thể quá hẹp. Phải nêu trong báo cáo.
+\end{itemize}
+\end{warnbox}

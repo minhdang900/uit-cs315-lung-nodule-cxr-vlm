@@ -106,7 +106,7 @@ theo cách của NoduLoCC~\cite{mustafic2026noduloc}.
 tertile diện tích box tương đối, ngưỡng tertile lấy từ ca dương train VinBigData (\code{e0\_data\_edges.json});
 JSRT theo mm: $\le 10$, 10--20, $> 20$\,mm; thêm theo độ mờ JSRT 1--5.
 
-\paragraph{Thống kê.} Trung bình $\pm$ độ lệch chuẩn qua các seed; CI 95\% bằng bootstrap theo ảnh (2.000 lần lấy
+\paragraph{Thống kê.} Trung bình $\pm$ độ lệch chuẩn qua các seed; CI 95\% bằng bootstrap theo ảnh (1.000 lần lấy
 mẫu lại), phân tầng theo nhãn (CI theo từng seed lưu trong \code{summary\_per\_seed.csv}); McNemar cho sens/spec,
 DeLong cho AUC, hiệu chỉnh Holm khi so nhiều cặp (\code{comparisons.csv}). Bootstrap lấy mẫu theo ảnh, không gộp
 theo bệnh nhân, nên CI có thể hẹp hơn thực tế nếu một bệnh nhân có nhiều ảnh; đây là một hạn chế.
@@ -119,7 +119,7 @@ Hình~\ref{fig:evalflow} tóm tắt luồng đánh giá.
   \node[forange, text width=2.2cm, minimum height=1.3cm] (th) at (4.1,0) {\textbf{Validation}\\$t_{90}$, $t_{95}$ theo\\(config, seed, run)};
   \node[fb, text width=3.0cm, minimum height=1.3cm] (mt) at (7.75,0) {\textbf{Ba tập test}\\sens, spec, AUC, AUC-PR,\\ECE, Brier, PPV ở 1\% và 3\%};
   \node[fb, text width=3.0cm] (loc) at (7.75,-1.75) {\textbf{Định vị}: box có $s \ge t_{90}$\\FROC: mọi box};
-  \node[fblue, text width=2.5cm] (bs) at (11.55,1.25) {Bootstrap theo ảnh\\CI 95\% (2.000 lần)};
+  \node[fblue, text width=2.5cm] (bs) at (11.55,1.25) {Bootstrap theo ảnh\\CI 95\% (1.000 lần)};
   \node[fblue, text width=2.5cm] (mc) at (11.55,0) {McNemar (sens/spec)\\DeLong (AUC)};
   \node[fblue, text width=2.5cm] (ho) at (11.55,-1.25) {Holm khi so\\nhiều cặp};
   \node[fgreen, text width=1.4cm, minimum height=1.3cm] (out) at (14.5,0) {\code{summary}\\\code{.csv/.md}};

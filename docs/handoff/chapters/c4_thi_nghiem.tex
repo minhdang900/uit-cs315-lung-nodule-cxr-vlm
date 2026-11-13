@@ -1,0 +1,120 @@
+\section{Các cấu hình và thí nghiệm}
+\label{sec:configs}
+
+\subsection{Bảy cấu hình}
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}l L l L@{}}
+\toprule
+\textbf{Mã} & \textbf{Cấu hình (spec §5.2)} & \textbf{Đầu ra} & \textbf{Trong code} \\
+\midrule
+C0 & VLM zero-shot (MedGemma-4B, Qwen2.5-VL-3B), không huấn luyện & JSON & \code{predict\_vlm.py}, không \code{--adapter}; \code{--config C0-medgemma}/\code{C0-qwen} \\
+C1 & LoRA MedGemma-4B, chỉ phân loại & yes/no & \code{train\_lora.py --mode cls} \\
+C2 & LoRA MedGemma-4B, phân loại + định vị & yes/no + box & \code{--mode loc} \\
+C3 & C2 + cân bằng lớp (oversampling 1:1, trọng số loss cố định $w_+=2{,}0$, không tinh chỉnh) & yes/no + box & \code{--mode loc --balance --pos-weight 2.0} \\
+C4 & Cấu hình tốt nhất trong C1--C3, áp lên Qwen2.5-VL-3B & như nguồn & \code{train\_lora.py --model qwen} + cờ của cấu hình nguồn \\
+B1 & DenseNet-121 (bộ phân loại) & xác suất & \code{train\_densenet.py} \\
+B2 & YOLOv8 (bộ phát hiện) & box + điểm & \code{train\_yolo.py} (mặc định \code{yolov8s.pt}) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\textbf{Mở rộng, không bắt buộc:} C5 (VLM nhận box đề xuất từ B2) và C6 (chia ô ảnh). Chỉ làm khi C0--C4, B1, B2 và E5 đã xong.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}l L@{}}
+\toprule
+\textbf{Siêu tham số} & \textbf{Giá trị mặc định trong code} \\
+\midrule
+LoRA (\code{train/lora.py}) & $r=16$, $\alpha=32$, dropout 0,05; chỉ q/k/v/o/gate/up/down\_proj của LLM \\
+\code{train\_lora.py} & batch 1, \code{--grad-accum 8}, \code{--lr 1e-4}, cosine, warmup 3\%, \code{--epochs 3}, \code{--neg-per-pos 4.0}, lưu checkpoint mỗi epoch \\
+\code{train\_densenet.py} & ảnh 224 px, batch 32, Adam lr 1e-4, \code{--epochs 10}, BCE có \code{pos\_weight} = âm/dương; giữ epoch có val AUC cao nhất \\
+\code{train\_yolo.py} & \code{--weights yolov8s.pt}, imgsz 896, batch 16, \code{--epochs 50}, \code{--neg-per-pos 4.0} \\
+\code{predict\_vlm.py} & \code{--max-new-tokens 96} (C0 dùng 256), \code{--temperature 0.0}, \code{--prompt loc}, \code{--generate all} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Sáu thí nghiệm E0--E5}
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}l L L l@{}}
+\toprule
+\textbf{Mã} & \textbf{Nội dung} & \textbf{Kết quả cần có} & \textbf{Số lượt} \\
+\midrule
+E0 & Chuẩn bị dữ liệu, thống kê, hợp nhất box & Bảng mô tả dữ liệu & 1 \\
+E1 & Baseline B1, B2 trên VinBigData; đánh giá trên 3 tập test & AUC, sens@spec0,90, FROC & 3 seed mỗi loại \\
+E2 & C0 cho 2 VLM; 3 lần (nhiệt độ 0 một lần, 0,7 hai lần) & Bảng zero-shot, tỷ lệ parse lỗi, độ ổn định & 3 run $\times$ 2 model \\
+E3 & LoRA C1, C2, C3 trên MedGemma & Bảng so sánh, đường học & 3 cấu hình $\times$ 3 seed \\
+E4 & C4 trên Qwen2.5-VL-3B & Y khoa vs đa năng & 1--3 seed \\
+E5 & Che vùng cho C0-medgemma, LoRA tốt nhất, B2; trên \code{test} và \code{test\_jsrt} & Bảng đổi đáp án, sens theo tầng & 3 mô hình $\times$ 2 tập \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.5cm and 0.6cm, every node/.style={font=\scriptsize}]
+\node[box,minimum width=2.0cm] (e0) {E0\\dữ liệu};
+\node[obox,right=of e0,minimum width=2.0cm] (pc) {7 kiểm tra\\bắt buộc};
+\node[gbox,right=0.8cm of pc,yshift=1.2cm,minimum width=2.0cm] (e1) {E1\\B1, B2};
+\node[gbox,right=0.8cm of pc,minimum width=2.0cm] (e2) {E2\\C0};
+\node[gbox,right=0.8cm of pc,yshift=-1.2cm,minimum width=2.0cm] (e3) {E3\\C1, C2, C3};
+\node[rbox,right=0.9cm of e2,minimum width=2.4cm,minimum height=1.6cm] (gate) {\textbf{CỔNG}\\make\_report.py\\chọn theo\\\code{val\_sens90} TB};
+\node[gbox,right=0.8cm of gate,yshift=0.8cm,minimum width=1.8cm] (e4) {E4\\C4};
+\node[gbox,right=0.8cm of gate,yshift=-0.8cm,minimum width=1.8cm] (e5) {E5\\che vùng};
+\node[box,below=0.8cm of e5,minimum width=3.4cm] (final) {make\_report.py lần cuối\\$\rightarrow$ điền báo cáo};
+\draw[arr] (e0)--(pc); \draw[arr] (pc)--(e1); \draw[arr] (pc)--(e2); \draw[arr] (pc)--(e3);
+\draw[arr] (e1)--(gate); \draw[arr] (e2)--(gate); \draw[arr] (e3)--(gate);
+\draw[arr] (gate)--(e4); \draw[arr] (gate)--(e5);
+\draw[arr] (e4.east) -- ++(1.2,0) |- (final.east);
+\draw[arr] (e5) -- (final);
+\node[lab,text=badred,below=0.05cm of gate] {chỉ nhìn val, không nhìn test};
+\end{tikzpicture}
+\caption{Thứ tự thí nghiệm. Cổng đỏ: chọn ``cấu hình tốt nhất'' cho E4 và E5 chỉ bằng \code{val\_selection.csv}. Tập test chỉ dùng để chấm, một lần.}
+\label{fig:dag}
+\end{figure}
+
+\begin{dangerbox}
+\textbf{Quy tắc ``chọn trên val, chấm test một lần''.} Ngưỡng $t_{90}$, epoch, cấu hình tốt nhất cho C4 và E5: tất cả chọn trên validation.
+Các cột của tập test trong \code{summary.csv} \textbf{không được} dùng để chọn. Nếu đã lỡ nhìn test rồi đổi cấu hình, phải ghi rõ vào
+\code{docs/decisions.md} và nêu trong báo cáo.
+\end{dangerbox}
+
+\subsection{Lịch đề xuất}
+
+\begin{warnbox}
+Đây là \textbf{đề xuất} của người bàn giao, không phải lịch của môn học. Nhóm hãy chỉnh theo hạn nộp thật và ngân sách GPU thật
+(đo ở kiểm tra mục 7 và pilot E3).
+\end{warnbox}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1.45cm,y=0.52cm]
+\foreach \w in {1,...,6} {
+  \node[font=\scriptsize\bfseries] at (\w+0.5,0.8) {Tuần \w};
+  \draw[black!15] (\w,0.4) -- (\w,-11.6);
+}
+\draw[black!15] (7,0.4) -- (7,-11.6);
+\newcommand{\task}[5]{% hàng, bắt đầu, độ dài, màu, nhãn
+  \node[font=\scriptsize,anchor=east] at (0.95,-#1) {#5};
+  \fill[#4,rounded corners=1.5pt] (#2,-#1-0.35) rectangle ++(#3,0.7);}
+\task{0}{1}{1}{uitblue!60}{Quyền GitHub, HF; clone; test CPU}
+\task{1}{1}{1.5}{uitblue!60}{Tải 3 bộ dữ liệu}
+\task{2}{2}{0.5}{uitblue!60}{prepare\_* + E0}
+\task{3}{2.5}{0.5}{warnorange!80}{7 kiểm tra bắt buộc (GPU)}
+\task{4}{3}{1}{okgreen!60}{E1: B1, B2 (3 seed)}
+\task{5}{3}{1}{okgreen!60}{E2: C0 (2 model $\times$ 3 run)}
+\task{6}{3.5}{1.5}{okgreen!60}{E3: C1--C3 (3 seed) + dự đoán}
+\task{7}{5}{0.3}{badred!70}{make\_report + chọn trên val}
+\task{8}{5.3}{0.7}{okgreen!60}{E4: C4 (Qwen)}
+\task{9}{5.3}{0.7}{okgreen!60}{E5: kiểm toán che vùng}
+\task{10}{6}{1}{black!40}{Điền báo cáo, slide, release}
+\task{11}{1}{6}{black!12}{Ghi budget.md, decisions.md (liên tục)}
+\end{tikzpicture}
+\caption{Lịch 6 tuần \textbf{đề xuất}. Cam: cổng kiểm tra GPU. Đỏ: cổng chọn cấu hình trên val.}
+\label{fig:gantt}
+\end{figure}

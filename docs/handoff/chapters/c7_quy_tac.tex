@@ -1,0 +1,57 @@
+\section{Quy tắc bắt buộc và tiêu chí hoàn thành}
+\label{sec:rules}
+
+\subsection{Nên và không nên}
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textcolor{okgreen}{\textbf{\ding{51}\ Nên}} & \textcolor{badred}{\textbf{\ding{55}\ Không được}} \\
+\midrule
+Chọn ngưỡng, epoch, cấu hình tốt nhất \textbf{chỉ trên validation} (\code{val\_selection.csv}). & Nhìn số trên test rồi quay lại đổi cấu hình, prompt, ngưỡng. \\
+Dùng seed cố định 0, 1, 2 như RUNBOOK; báo mean $\pm$ sd. & Chỉ báo seed đẹp nhất. \\
+Ghi thời gian, GPU, quyết định cắt giảm vào \code{outputs/budget.md}; tóm tắt sang \code{docs/decisions.md}. & Tự ý giảm dữ liệu/epoch mà không ghi lại. \\
+Báo tỷ lệ \code{unparsed} cạnh \code{raw\_sens} cho mọi cấu hình VLM sinh văn bản. & Bỏ qua câu trả lời không parse được, hoặc lặng lẽ coi chúng là ``yes''. \\
+Dùng run 0 (nhiệt độ 0) cho bảng chính của C0; run 1--2 chỉ cho độ ổn định. & Lấy run nhiệt độ 0,7 tốt nhất cho bảng chính. \\
+Báo CI 95\% và p-value sau Holm khi so sánh. & Viết ``tốt hơn'' khi CI chồng nhau nhiều và p $\ge 0{,}05$. \\
+Báo \code{delta} kèm \code{n\_t2\_ok} cho E5. & Báo \code{flip\_t1\_all} như số chính. \\
+Ghi chú PPV trên JSRT không có ý nghĩa lâm sàng (tỷ lệ nốt 62\%). & Trình bày PPV trên JSRT như PPV thực tế. \\
+Chạy 7 kiểm tra bắt buộc trước E1--E5. & Chạy thẳng E3 trên GPU khi chưa qua mục 1--3. \\
+Chép lệnh từ RUNBOOK; thêm lệnh mới vào RUNBOOK qua PR. & Chạy lệnh tự chế rồi quên ghi. \\
+Gọi sản phẩm là ``nguyên mẫu nghiên cứu''. & Viết ``ngang bác sĩ'' hay gợi ý dùng lâm sàng. \\
+Nêu hạn chế: nhãn nhiễu, CI không gộp theo bệnh nhân, rò rỉ tiền huấn luyện, chia theo ảnh. & Giấu kết quả âm tính. Kết quả âm tính vẫn trả lời được Q1/Q2. \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Định nghĩa ``xong'' cho từng thí nghiệm}
+
+Một thí nghiệm chỉ được coi là \textbf{xong} khi mọi ô dưới đây đã đánh dấu.
+
+\begin{keybox}
+\textbf{Chung cho mọi thí nghiệm}\\
+\cb Lệnh đã chạy được ghi lại (lệnh RUNBOOK, hoặc lệnh mới đã thêm vào RUNBOOK qua PR).\\
+\cb Thời gian chạy, loại GPU ghi trong \code{outputs/budget.md}.\\
+\cb Quyết định mới (nếu có) ghi trong \code{docs/decisions.md}.\\
+\cb Không có file cấm trong commit (\code{git status} sạch phần dữ liệu/kết quả).
+\end{keybox}
+
+\begin{center}
+\small
+\begin{longtable}{@{}l P{13.2cm}@{}}
+\toprule
+\textbf{TN} & \textbf{Tiêu chí xong} \\
+\midrule\endhead
+Kiểm tra & \cb 7/7 mục đạt, ghi kết quả từng mục. \cb Có số giây/ảnh của 2 VLM và giây/ảnh của mặt nạ phổi. \cb Có \code{timing.json} của pilot và ngoại suy thời gian một lượt đầy đủ. \\
+E0 & \cb 3 manifest tồn tại. \cb Đã xem ảnh trong \code{outputs/qa/} và box đúng chỗ. \cb Có \code{e0\_data.md}, \code{e0\_data\_edges.json}. \cb Ghi số ca dương thật của từng split. \cb Đã điền \code{tab:data-stats}. \\
+E1 & \cb \code{B1.jsonl}, \code{B2.jsonl} có đủ 3 seed $\times$ mọi ảnh val/test/test\_nih/test\_jsrt. \cb 3 file \code{best.pt} trên Drive. \\
+E2 & \cb \code{C0-medgemma.jsonl}, \code{C0-qwen.jsonl} có run 0, 1, 2 cho mọi ảnh. \cb Đã đọc thử \code{raw\_text}, ghi tỷ lệ \code{unparsed}. \\
+E3 & \cb 9 adapter \code{final/} (C1--C3 $\times$ 3 seed). \cb 9 bộ dự đoán trong \code{C1/C2/C3.jsonl}. \cb Đường học (seed 0). \cb \code{loss} pilot nằm trong 0,5--3. \\
+Cổng & \cb \code{make\_report.py} chạy không lỗi. \cb Cấu hình tốt nhất chọn theo trung bình \code{val\_sens90} (chỉ C1--C3), ghi vào \code{decisions.md} kèm số. \\
+E4 & \cb Ít nhất 1 seed C4 huấn luyện bằng đúng cờ của cấu hình nguồn. \cb \code{C4.jsonl} đủ 4 split. \\
+E5 & \cb 6 file JSON (3 mô hình $\times$ \code{test}, \code{test\_jsrt}). \cb Dùng đúng \code{t90} từ \code{thresholds.json}. \cb Ghi loại mặt nạ phổi đã dùng. \\
+Báo cáo & \cb Không còn ô \textcolor{badred}{[--]}. \cb Tóm tắt và kết luận trả lời Q1, Q2. \cb Đã điền tên GVHD. \cb \code{main.pdf} biên dịch không lỗi. \cb Release \code{develop} $\rightarrow$ \code{main} kèm tag. \\
+\bottomrule
+\end{longtable}
+\end{center}
