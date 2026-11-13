@@ -1,9 +1,10 @@
-"""Build manifest_jsrt.csv and 896px PNGs from JSRT .IMG files."""
+"""Build manifest_jsrt.csv and 896px PNGs from JSRT (.IMG release or the current DICOM release)."""
 import argparse
 from pathlib import Path
 
-from nodulecxr.data.jsrt import build_jsrt_manifest, parse_clndat, parse_nndat
-from nodulecxr.images import read_jsrt_img, resize_square
+from nodulecxr.data.jsrt import (CLN_NAMES, NN_NAMES, build_jsrt_manifest, find_clinical_file,
+                                 find_jsrt_image, parse_clndat, parse_nndat)
+from nodulecxr.images import dicom_to_uint8, read_jsrt_img, resize_square
 from nodulecxr.records import write_manifest
 
 
@@ -13,14 +14,15 @@ def main():
     ap.add_argument("--out-root", required=True)
     a = ap.parse_args()
     raw = Path(a.raw_dir)
-    cln = parse_clndat((raw / "CLNDAT_EN.txt").read_text(encoding="latin-1"))
-    nn = parse_nndat((raw / "NNDAT_EN.txt").read_text(encoding="latin-1"))
+    cln = parse_clndat(find_clinical_file(raw, CLN_NAMES).read_text(encoding="latin-1"))
+    nn = parse_nndat(find_clinical_file(raw, NN_NAMES).read_text(encoding="latin-1"))
     man = build_jsrt_manifest(cln, nn)
     out = Path(a.out_root) / "jsrt"
     out.mkdir(parents=True, exist_ok=True)
     for stem in man["image_id"]:
-        src = next(raw.rglob(f"{stem}.IMG"), None) or next(raw.rglob(f"{stem.lower()}.img"))
-        resize_square(read_jsrt_img(src)).save(out / f"{stem}.png")
+        src = find_jsrt_image(raw, stem)
+        img = read_jsrt_img(src) if src.suffix.lower() == ".img" else dicom_to_uint8(src)
+        resize_square(img).save(out / f"{stem}.png")
     write_manifest(man, Path(a.out_root) / "manifest_jsrt.csv")
     print(man["label"].value_counts())
 
