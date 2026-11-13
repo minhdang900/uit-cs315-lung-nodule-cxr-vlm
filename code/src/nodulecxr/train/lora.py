@@ -17,9 +17,15 @@ def _trainer_base():
 
 
 class WeightedSFTTrainer(_trainer_base()):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Trainer then passes num_items_in_batch and does not re-divide by grad-accum steps.
+        self.model_accepts_loss_kwargs = True
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):
         weights = inputs.pop("sample_weight")
         labels = inputs.pop("labels")
         outputs = model(**inputs)
-        loss = weighted_token_ce(outputs.logits, labels, weights.to(outputs.logits.device))
+        loss = weighted_token_ce(outputs.logits, labels, weights.to(outputs.logits.device),
+                                 denom=num_items_in_batch)
         return (loss, outputs) if return_outputs else loss
