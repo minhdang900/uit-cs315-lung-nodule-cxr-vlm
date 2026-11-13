@@ -22,3 +22,21 @@ def test_scorer_that_looks_at_nodule_flips_only_on_t1():
                       edges=(0.001, 0.01))
     s = summarize_audit(df, 0.5)
     assert s["flip_t1"] == 1.0 and s["flip_t2"] == 0.0 and s["delta"] == 1.0 and s["yes_rate_t3"] == 0.0
+    assert s["n_t2_ok"] == 1 and s["flip_t1_all"] == 1.0
+
+
+def test_t2_box_area_equals_expanded_t1_area():
+    box = [200, 300, 260, 360]
+    img = _img_with_blob(box)
+    fill = int(round(np.array(img).mean()))
+    counts = []
+
+    def score(im):
+        counts.append(int((np.array(im) == fill).all(axis=-1).sum()))
+        return 0.0
+
+    pos = pd.DataFrame({"image_id": ["p"], "path": ["p"], "boxes": [[box]], "subtlety": [3]})
+    neg = pd.DataFrame({"image_id": ["n"], "path": ["n"]})
+    audit_images(score, pos, neg, lambda p: img, 0.5, lambda im: heuristic_lung_mask(), edges=(0.001, 0.01))
+    orig, t1, t2, _ = counts
+    assert t1 - orig > 0 and t2 - orig == t1 - orig
