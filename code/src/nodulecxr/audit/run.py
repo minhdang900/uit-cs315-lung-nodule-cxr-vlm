@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from nodulecxr.audit.occlusion import expand_box, flip_rate, occlude, sample_random_box
-from nodulecxr.strata import box_rel_area, size_bin
+from nodulecxr.strata import nodule_stratum
 
 
 def audit_images(score_fn, positives, negatives, load_image, threshold, lung_mask_fn, edges, seed=0):
@@ -24,8 +24,7 @@ def audit_images(score_fn, positives, negatives, load_image, threshold, lung_mas
         s_t2 = score_fn(occlude(img, [b for b in rand if b is not None])) if t2_ok else float("nan")
         neg = neg_list[int(rng.integers(len(neg_list)))]
         s_t3 = score_fn(load_image(neg.path))
-        area = max(box_rel_area(b) for b in boxes)
-        rows.append({"image_id": r.image_id, "size_bin": size_bin(area, edges),
+        rows.append({"image_id": r.image_id, "size_bin": nodule_stratum(boxes, getattr(r, "size_mm", None), edges),
                      "subtlety": getattr(r, "subtlety", None), "s_orig": s_orig, "s_t1": s_t1,
                      "s_t2": s_t2, "s_t3": s_t3, "t2_ok": t2_ok})
     return pd.DataFrame(rows)

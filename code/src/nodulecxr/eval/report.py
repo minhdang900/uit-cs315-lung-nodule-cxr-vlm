@@ -11,7 +11,8 @@ from nodulecxr.metrics.detection import (binary_metrics, ppv_at_prevalence, pred
                                          threshold_at_specificity)
 from nodulecxr.metrics.localization import best_iou, center_distance, froc_points, jsrt_hit
 from nodulecxr.metrics.stats import bootstrap_ci, delong_test, holm, mcnemar_p
-from nodulecxr.strata import box_rel_area, size_bin
+from nodulecxr.prompts import parse_answer
+from nodulecxr.strata import nodule_stratum
 
 TEST_SPLITS = ("test", "test_nih", "test_jsrt")
 KEY = ["config", "seed", "run"]
@@ -65,15 +66,26 @@ def evaluate_group(g, thr, edges) -> tuple:
         generated = bool(d["raw_text"].astype(str).str.len().gt(0).any() if "raw_text" in d
                          else d["label_pred"].notna().any() if "label_pred" in d else False)
         if generated:
-            raw = d.label_pred.fillna(0).astype(int).to_numpy() if "label_pred" in d else np.zeros(len(d))
+            lp = d["label_pred"] if "label_pred" in d else pd.Series([None] * len(d), index=d.index)
+            parsed = lp.notna().to_numpy()
+            # raw_sens/raw_spec: the generated answer as a classifier, with unparsed answers counted as "no"
+            raw = lp.fillna(0).astype(int).to_numpy()
             rm = binary_metrics(y, raw)
+            lab = raw[parsed]
+            pos_p, neg_p = y[parsed] == 1, y[parsed] == 0
             row.update({"raw_sens": rm["sens"], "raw_spec": rm["spec"],
                         "parse_fail": float(1 - d.parse_ok.astype(bool).mean()) if "parse_ok" in d else 0.0,
-                        "no_on_pos": 1 - rm["sens"], "yes_on_neg": 1 - rm["spec"]})
+                        # normal-mode rates use parsed answers only; parse failures are reported in `unparsed`
+                        "no_on_pos": float(np.mean(lab[pos_p] == 0)) if pos_p.any() else float("nan"),
+                        "yes_on_neg": float(np.mean(lab[neg_p] == 1)) if neg_p.any() else float("nan"),
+                        "unparsed": float(1 - parsed.mean())})
         else:  # config never produced text (B1, B2, C1 with --generate none): text metrics are undefined
-            row.update({k: float("nan") for k in ("raw_sens", "raw_spec", "parse_fail", "no_on_pos", "yes_on_neg")})
+            row.update({k: float("nan") for k in ("raw_sens", "raw_spec", "parse_fail", "no_on_pos", "yes_on_neg",
+                                                  "unparsed")})
         pos = d[d.y == 1]
-        ious = [best_iou(pb, gt) for pb, gt in zip(pos.boxes_pred, pos["gt"])]
+        # IoU hits use only boxes at or above the operating threshold (B2 emits many low-confidence boxes;
+        # VLM boxes carry the image score, so for them this equals the image-level decision). FROC keeps all.
+        ious = [best_iou([b for b in pb if b[4] >= thr["t90"]], gt) for pb, gt in zip(pos.boxes_pred, pos["gt"])]
         pos_pred = predict_at(pos.score, thr["t90"])
         has_boxes = d.boxes_pred.apply(len).sum() > 0
         no_loc = not generated and not has_boxes  # localization undefined for this config
@@ -104,7 +116,7 @@ def evaluate_group(g, thr, edges) -> tuple:
             row["jsrt_median_dist_mm"] = float(np.median(dists)) if dists else float("nan")
         rows.append(row)
         for r, pp in zip(pos.itertuples(), pos_pred):
-            strata.append({"split": split, "size_bin": size_bin(max(box_rel_area(b) for b in r.gt), edges) if r.gt else None,
+            strata.append({"split": split, "size_bin": nodule_stratum(r.gt, getattr(r, "size_mm", None), edges),
                            "subtlety": r.subtlety, "detected": int(pp)})
     return rows, strata
 
@@ -133,6 +145,9 @@ def evaluate_all(preds, manifest, edges):
 
 
 def aggregate_seeds(summary) -> pd.DataFrame:
+    """mean ± sd over seeds; only run 0 (C0 runs 1-2 at temperature 0.7 feed run_agreement, not the table)."""
+    if "run" in summary:
+        summary = summary[summary.run == 0]
     num = summary.select_dtypes("number").columns.difference(["seed", "run"])
     g = summary.groupby(["config", "split"])[list(num)]
     out = g.mean().add_suffix("_mean").join(g.std().add_suffix("_sd")).reset_index()
@@ -165,15 +180,32 @@ def compare_configs(preds, manifest, thresholds, split, seed=0, run=0) -> pd.Dat
 
 
 def run_agreement(preds) -> pd.DataFrame:
-    p = preds.copy()
-    p["label_pred"] = p["label_pred"].fillna(0).astype(int)
+    """Label agreement across runs, over images whose answer parsed in every run."""
     rows = []
-    for (cfg, seed), g in p.groupby(["config", "seed"]):
-        if g.run.nunique() < 2:
+    for (cfg, seed), g in preds.groupby(["config", "seed"]):
+        n_runs = g.run.nunique()
+        if n_runs < 2:
             continue
-        same = g.groupby("image_id").label_pred.nunique() == 1
-        rows.append({"config": cfg, "seed": seed, "n_runs": g.run.nunique(), "agreement": float(same.mean())})
+        per_img = g.groupby("image_id").label_pred.agg(["count", "nunique"])
+        ok = per_img[per_img["count"] == n_runs]  # count() skips nulls: all runs parsed
+        rows.append({"config": cfg, "seed": seed, "n_runs": n_runs, "n_images": len(ok),
+                     "agreement": float((ok["nunique"] == 1).mean()) if len(ok) else float("nan")})
     return pd.DataFrame(rows)
+
+
+def reparse_predictions(preds) -> pd.DataFrame:
+    """Re-parse non-empty raw_text with the current parser (label_pred, boxes_pred + row score, parse_ok)."""
+    p = preds.copy()
+    if "raw_text" not in p:
+        return p
+    p["label_pred"] = p["label_pred"].astype(object)
+    has = p["raw_text"].fillna("").astype(str).str.len() > 0
+    for i in p.index[has]:
+        pa = parse_answer(p.at[i, "raw_text"])
+        p.at[i, "label_pred"] = pa.label
+        p.at[i, "boxes_pred"] = [b + [float(p.at[i, "score"])] for b in pa.boxes]
+        p.at[i, "parse_ok"] = pa.ok
+    return p
 
 
 def val_selection(labelled, thresholds) -> pd.DataFrame:
