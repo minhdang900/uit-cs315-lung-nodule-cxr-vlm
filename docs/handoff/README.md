@@ -45,7 +45,7 @@ flowchart LR
   subgraph RAW[Dữ liệu thô - không commit]
     V[VinBigData<br/>DICOM/PNG + train.csv]
     N[NIH ChestX-ray14<br/>PNG + 2 CSV]
-    J[JSRT<br/>.IMG + 2 TXT]
+    J[JSRT<br/>DICOM + 2 TXT]
   end
   P[prepare_*.py<br/>WBF, 896 px, chia 70/10/20]
   M[(data/processed/<br/>manifest_*.csv + PNG)]
@@ -141,14 +141,14 @@ gantt
 | Bộ | Nguồn | Script và file cần có |
 |---|---|---|
 | VinBigData | Kaggle, cuộc thi `vinbigdata-chest-xray-abnormalities-detection` (phải chấp nhận luật) | `prepare_vinbig.py --train-csv train.csv --out-root $M` cùng **một** trong hai: `--dicom-dir` (file `<image_id>.dicom`) hoặc `--png-dir` + `--meta-csv` (PNG `<image_id>.png` và CSV có `image_id` + kích thước **gốc**, cột mặc định `dim0` = cao, `dim1` = rộng; đổi bằng `--h-col`/`--w-col`). Tùy chọn: `--official-test-csv` + `--official-test-dicom` (tập test VinDr-CXR; khi đó chia 85/15). |
-| NIH ChestX-ray14 | NIH Clinical Center (hoặc bản Kaggle) | `prepare_nih.py --raw-dir <dir> --out-root $M`. Thư mục cần `Data_Entry_2017.csv`, `BBox_List_2017.csv` và **toàn bộ** ảnh PNG (ảnh âm rút ngẫu nhiên từ mọi ảnh "No Finding"). `--neg-ratio` mặc định 3. |
-| JSRT | Japanese Society of Radiological Technology, cần đăng ký | `prepare_jsrt.py --raw-dir <dir> --out-root $M`. Cần `CLNDAT_EN.txt`, `NNDAT_EN.txt` (đúng tên, ngay trong `--raw-dir`) và các file `.IMG`. |
+| NIH ChestX-ray14 | NIH Clinical Center Box; tải bằng `bash scripts/download_nih.sh ../data/raw/nih` (chỉ giữ 656 ảnh manifest cần) | `prepare_nih.py --raw-dir <dir> --out-root $M`. Thư mục cần `Data_Entry_2017.csv`, `BBox_List_2017.csv` và **toàn bộ** ảnh PNG (ảnh âm rút ngẫu nhiên từ mọi ảnh "No Finding"). `--neg-ratio` mặc định 3. |
+| JSRT | Ảnh DICOM chính thức tại imgcom.jsrt.or.jp/download (miễn phí); file lâm sàng lấy từ repo HybridGNet. Tải bằng `bash scripts/download_jsrt.sh ../data/raw/jsrt` | `prepare_jsrt.py --raw-dir <dir> --out-root $M`. Nhận bản `.IMG` cũ hoặc DICOM mới, và các tên file lâm sàng `CLNDAT_EN.txt`, `CNNDAT_EN.TXT` (hoặc tên cũ). Đã kiểm chứng box khớp nốt. |
 
 Dữ liệu thô để trong `data/raw/` (gợi ý `data/raw/vinbig/`, `nih/`, `jsrt/`), kết quả `prepare_*` vào `data/processed/` (xem `data/README.md`).
 
 VinBigData chia theo `image_id` (70/10/20, phân tầng theo nhãn), **không** theo bệnh nhân (bản Kaggle không có mã bệnh nhân): rủi ro rò rỉ, phải nêu thành hạn chế (D9).
 
-Chưa kiểm chứng: tên bộ PNG cụ thể trên Kaggle; định dạng file nhãn test VinDr-CXR; tên file thông tin trong gói tải JSRT hiện tại. Xem hộp "Chưa kiểm chứng được" trong sổ tay PDF §6.5.
+Chưa kiểm chứng: tên bộ PNG cụ thể trên Kaggle; định dạng file nhãn test VinDr-CXR. Xem hộp "Chưa kiểm chứng được" trong sổ tay PDF §6.5.
 
 ## 6. Runbook
 

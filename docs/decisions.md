@@ -161,12 +161,18 @@ Các mục D1–D27 do nhóm trước ghi lúc bàn giao (2026-11-13), lấy t�
 - **Lý do:** nhóm mới cần quy trình rõ ràng để làm song song và giữ lịch sử.
 - **Nguồn:** `docs/handoff/so_tay_ban_giao.pdf` §7.
 
+### D28 – 2026-11-13 – Nguồn dữ liệu JSRT và NIH
+- **Quyết định:** JSRT dùng bản DICOM chính thức tại imgcom.jsrt.or.jp/download; file lâm sàng `CLNDAT_EN.txt`/`CNNDAT_EN.TXT` lấy từ repo HybridGNet vì trang đăng ký chính thức (db.jsrt.or.jp) đã chết. `prepare_jsrt.py` đọc cả `.IMG` lẫn `.dcm`. NIH tải từ Box chính thức theo `file_id` (link static cũ đã hỏng) và chỉ giữ 656 ảnh manifest cần (`scripts/download_nih.sh`).
+- **Lý do:** nguồn cũ không còn truy cập được; tải toàn bộ 45 GB ảnh NIH không cần thiết khi manifest chỉ dùng 656 ảnh.
+- **Kiểm chứng:** JSRT 247 DICOM 2048×2048, 0,175 mm/px, MONOCHROME2; manifest 154/93; box khớp nốt khi xem bằng `draw_boxes.py`.
+- **Nguồn:** `code/scripts/download_jsrt.sh`, `code/scripts/download_nih.sh`, `code/src/nodulecxr/data/jsrt.py`.
+
 ---
 
 ## Mẫu cho mục mới
 
 ```markdown
-### D28 – YYYY-MM-DD – <quyết định ngắn>
+### D29 – YYYY-MM-DD – <quyết định ngắn>
 - **Quyết định:** ...
 - **Lý do:** ...
 - **Nguồn:** <spec §..., PR #..., outputs/... (ngày chạy)>
