@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from nodulecxr.eval.report import (_with_labels, aggregate_seeds, compare_configs, compute_thresholds,
-                                   evaluate_all, run_agreement)
+                                   evaluate_all, run_agreement, val_selection)
 
 
 def _data():
@@ -43,3 +43,37 @@ def test_run_agreement():
     p = pd.DataFrame({"image_id": ["a", "a", "b", "b"], "config": "C0", "seed": 0, "run": [0, 1, 0, 1],
                       "label_pred": [1, 1, 0, 1]})
     assert run_agreement(p).loc[0, "agreement"] == 0.5
+
+
+def test_non_generating_group_has_nan_text_and_loc_metrics():
+    preds, man = _data()
+    p = preds[preds.config == "C3"].copy()
+    p["config"] = "B1"
+    p["label_pred"] = None
+    p["boxes_pred"] = [[] for _ in range(len(p))]
+    p["raw_text"] = ""
+    summary, _ = evaluate_all(p, man, edges=(0.001, 0.01))
+    row = summary[summary.split == "test"].iloc[0]
+    for col in ("raw_sens", "raw_spec", "parse_fail", "no_on_pos", "yes_on_neg",
+                "mean_best_iou", "hit_iou30", "hit_iou50", "froc_1fp"):
+        assert np.isnan(row[col]), col
+    assert np.isfinite([row["sens"], row["spec"], row["auc_roc"]]).all()
+
+
+def test_generating_group_without_boxes_has_zero_froc():
+    preds, man = _data()
+    p = preds[preds.config == "C3"].copy()
+    p["boxes_pred"] = [[] for _ in range(len(p))]
+    p["raw_text"] = '{"nodule": "no"}'
+    summary, _ = evaluate_all(p, man, edges=(0.001, 0.01))
+    row = summary[summary.split == "test"].iloc[0]
+    assert row["froc_1fp"] == 0.0 and row["hit_iou30"] == 0.0 and np.isfinite(row["raw_sens"])
+
+
+def test_val_selection():
+    preds, man = _data()
+    lab = _with_labels(preds, man)
+    vs = val_selection(lab, compute_thresholds(lab))
+    assert list(vs.columns) == ["config", "seed", "run", "val_sens90", "val_auc"] and len(vs) == 2
+    c3 = vs[vs.config == "C3"].iloc[0]
+    assert c3.val_sens90 > vs[vs.config == "C0"].iloc[0].val_sens90 and c3.val_auc > 0.9
