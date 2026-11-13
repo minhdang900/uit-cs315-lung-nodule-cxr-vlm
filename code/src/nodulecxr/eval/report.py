@@ -62,24 +62,36 @@ def evaluate_group(g, thr, edges) -> tuple:
             row[f"{name}_lo"], row[f"{name}_hi"] = lo, hi
         row["ppv_prev_1pct"] = ppv_at_prevalence(m["sens"], m["spec"], 0.01)
         row["ppv_prev_3pct"] = ppv_at_prevalence(m["sens"], m["spec"], 0.03)
-        raw = d.label_pred.fillna(0).astype(int).to_numpy() if "label_pred" in d else np.zeros(len(d))
-        rm = binary_metrics(y, raw)
-        row.update({"raw_sens": rm["sens"], "raw_spec": rm["spec"],
-                    "parse_fail": float(1 - d.parse_ok.astype(bool).mean()) if "parse_ok" in d else 0.0,
-                    "no_on_pos": 1 - rm["sens"], "yes_on_neg": 1 - rm["spec"]})
+        generated = bool(d["raw_text"].astype(str).str.len().gt(0).any() if "raw_text" in d
+                         else d["label_pred"].notna().any() if "label_pred" in d else False)
+        if generated:
+            raw = d.label_pred.fillna(0).astype(int).to_numpy() if "label_pred" in d else np.zeros(len(d))
+            rm = binary_metrics(y, raw)
+            row.update({"raw_sens": rm["sens"], "raw_spec": rm["spec"],
+                        "parse_fail": float(1 - d.parse_ok.astype(bool).mean()) if "parse_ok" in d else 0.0,
+                        "no_on_pos": 1 - rm["sens"], "yes_on_neg": 1 - rm["spec"]})
+        else:  # config never produced text (B1, B2, C1 with --generate none): text metrics are undefined
+            row.update({k: float("nan") for k in ("raw_sens", "raw_spec", "parse_fail", "no_on_pos", "yes_on_neg")})
         pos = d[d.y == 1]
         ious = [best_iou(pb, gt) for pb, gt in zip(pos.boxes_pred, pos["gt"])]
         pos_pred = predict_at(pos.score, thr["t90"])
-        row["mean_best_iou"] = float(np.mean(ious)) if ious else float("nan")
-        row["hit_iou30"] = float(np.mean([pp and i >= 0.3 for pp, i in zip(pos_pred, ious)])) if ious else float("nan")
-        row["hit_iou50"] = float(np.mean([pp and i >= 0.5 for pp, i in zip(pos_pred, ious)])) if ious else float("nan")
         has_boxes = d.boxes_pred.apply(len).sum() > 0
+        no_loc = not generated and not has_boxes  # localization undefined for this config
+        row["mean_best_iou"] = float(np.mean(ious)) if ious and not no_loc else float("nan")
+        row["hit_iou30"] = (float(np.mean([pp and i >= 0.3 for pp, i in zip(pos_pred, ious)]))
+                            if ious and not no_loc else float("nan"))
+        row["hit_iou50"] = (float(np.mean([pp and i >= 0.5 for pp, i in zip(pos_pred, ious)]))
+                            if ious and not no_loc else float("nan"))
         if has_boxes and len(pos):
             fr = froc_points(list(zip(d.boxes_pred, d["gt"])), iou_thr=0.3)
             row["froc_0.5fp"], row["froc_1fp"] = fr[0.5], fr[1]
+        elif generated and len(pos):
+            row["froc_0.5fp"] = row["froc_1fp"] = 0.0
         else:
             row["froc_0.5fp"] = row["froc_1fp"] = float("nan")
-        if split == "test_jsrt" and len(pos):
+        if split == "test_jsrt" and no_loc:
+            row["jsrt_hit"] = row["jsrt_median_dist_mm"] = float("nan")
+        elif split == "test_jsrt" and len(pos):
             hits, dists = [], []
             for pb, gt, pp in zip(pos.boxes_pred, pos["gt"], pos_pred):
                 if pp and pb:
@@ -162,3 +174,15 @@ def run_agreement(preds) -> pd.DataFrame:
         same = g.groupby("image_id").label_pred.nunique() == 1
         rows.append({"config": cfg, "seed": seed, "n_runs": g.run.nunique(), "agreement": float(same.mean())})
     return pd.DataFrame(rows)
+
+
+def val_selection(labelled, thresholds) -> pd.DataFrame:
+    """Per (config, seed, run): val sensitivity at that run's t90 and val AUC; used to pick configs (never test)."""
+    rows = []
+    for k, g in labelled[labelled.split == "val"].groupby(KEY):
+        if k not in thresholds:
+            continue
+        y, s = g.y.to_numpy(), g.score.to_numpy()
+        rows.append({**dict(zip(KEY, k)), "val_sens90": _sens(y, predict_at(s, thresholds[k]["t90"])),
+                     "val_auc": _auc(y, s)})
+    return pd.DataFrame(rows, columns=KEY + ["val_sens90", "val_auc"])
