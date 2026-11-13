@@ -32,7 +32,7 @@ flowchart LR
 
 | Thư mục | Nội dung |
 |---|---|
-| `code/` | Gói Python `nodulecxr`, các `scripts/`, 75 test CPU, `RUNBOOK.md` |
+| `code/` | Gói Python `nodulecxr`, các `scripts/`, 79 test CPU, `RUNBOOK.md` |
 | `report/` | Báo cáo LaTeX (`main.tex` → `main.pdf`); ô `[--]` màu đỏ chờ kết quả |
 | `docs/handoff/` | Sổ tay bàn giao (PDF và Markdown) |
 | `docs/design/` | Spec đã duyệt (v2, 2026-11-12, §8.5 ghi chú triển khai) |
@@ -43,7 +43,7 @@ flowchart LR
 
 ## Trạng thái lúc bàn giao (2026-11-13)
 
-- [x] Pipeline đã cài đặt xong; `cd code && pytest -q` chạy 75 test và tất cả đều đạt.
+- [x] Pipeline đã cài đặt xong; `cd code && pytest -q` chạy 79 test và tất cả đều đạt.
 - [ ] Phần GPU mới kiểm tra ở mức biên dịch. Phiên Colab đầu tiên **phải** chạy 7 mục "Kiểm tra bắt buộc" trong RUNBOOK.
 - [x] E0 dữ liệu (2026-11-13): `data/processed/` (4,9 GB) đã chuẩn bị trên Google Drive của chủ repo, không có trong git. Xin GVHD chia sẻ thư mục này, hoặc tự tạo lại bằng `scripts/download_nih.sh`, `scripts/download_jsrt.sh`, Kaggle (VinBigData) và các `prepare_*.py`. Số liệu ở `docs/decisions.md` D29.
 - [ ] Chưa chạy thí nghiệm E1–E5.
@@ -56,7 +56,7 @@ git clone https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git
 cd uit-cs315-lung-nodule-cxr-vlm/code
 python -m venv ~/.venvs/nodulecxr && source ~/.venvs/nodulecxr/bin/activate
 pip install -e ".[dev,torchcpu]"   # cần torch để không bị skip test
-pytest -q                          # kỳ vọng: 75 passed
+pytest -q                          # kỳ vọng: 79 passed
 ```
 
 Chạy GPU (MedGemma cần L4 hoặc A100, không dùng T4): xem `code/RUNBOOK.md`.
