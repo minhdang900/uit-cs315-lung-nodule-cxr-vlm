@@ -21,7 +21,7 @@ _DECODER = json.JSONDecoder()
 
 
 def build_target(label: int, boxes, with_boxes: bool = True) -> str:
-    d = {"nodule": "yes" if label else "no"}
+    d: dict = {"nodule": "yes" if label else "no"}
     if with_boxes:
         d["boxes"] = [[int(round(v)) for v in b[:4]] for b in boxes] if label else []
     return json.dumps(d)
