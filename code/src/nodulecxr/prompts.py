@@ -67,9 +67,15 @@ def _label_value(v) -> Optional[int]:
 
 
 def _label_from_dict(d: dict) -> Optional[int]:
-    key = "nodule" if "nodule" in d else next(
-        (k for k in d if isinstance(k, str) and _NODULE_KEY_RE.match(k)), None)
-    return None if key is None else _label_value(d[key])
+    """Label from `nodule`, else the first `nodule*` key whose value is a valid yes/no/bool."""
+    if "nodule" in d:
+        return _label_value(d["nodule"])
+    for k, v in d.items():
+        if isinstance(k, str) and _NODULE_KEY_RE.match(k):
+            label = _label_value(v)
+            if label is not None:
+                return label
+    return None
 
 
 def _boxes_from_dict(d: dict):
