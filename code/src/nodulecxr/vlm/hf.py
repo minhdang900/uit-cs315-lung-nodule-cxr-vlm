@@ -13,6 +13,9 @@ def load_base(key: str, dtype=None):
     import torch
     from transformers import AutoProcessor
     if dtype is None:
+        bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        if key == "medgemma" and not bf16_ok:
+            raise RuntimeError("MedGemma needs a bf16-capable GPU (L4/A100); fp16 overflows")
         dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
     mid = MODEL_IDS[key]
     if key == "qwen":
@@ -60,7 +63,7 @@ class HFVLM:
         return logits, enc["input_ids"][0]
 
     def yes_probability(self, image, prompt) -> float:
-        ly, iy = self._forced(image, prompt, ANSWER_PREFIX + 'yes"')
-        ln, in_ = self._forced(image, prompt, ANSWER_PREFIX + 'no"')
+        ly, iy = self._forced(image, prompt, ANSWER_PREFIX + 'yes')
+        ln, in_ = self._forced(image, prompt, ANSWER_PREFIX + 'no')
         k = first_divergence(iy.tolist(), in_.tolist())
         return two_way_probability(token_logprob_sum(ly, iy, k), token_logprob_sum(ln, in_, k))

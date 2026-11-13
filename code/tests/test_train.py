@@ -61,3 +61,17 @@ def test_weighted_ce_reduces_to_mean_and_weights_samples():
     heavy = weighted_token_ce(logits, labels, torch.tensor([10.0, 1.0]))
     only_first = weighted_token_ce(logits, labels, torch.tensor([1.0, 0.0]))
     assert abs(heavy.item() - only_first.item()) < abs(plain.item() - only_first.item())
+
+
+def test_weighted_ce_denom_makes_weight_effective_at_batch_one():
+    torch.manual_seed(1)
+    logits = torch.randn(1, 5, 6)
+    labels = torch.tensor([[-100, -100, 2, 3, 1]])
+    n = float((labels[:, 1:] != -100).sum())
+    l1 = weighted_token_ce(logits, labels, torch.tensor([1.0]), denom=n)
+    l2 = weighted_token_ce(logits, labels, torch.tensor([2.0]), denom=n)
+    assert l2.item() == pytest.approx(2 * l1.item(), rel=1e-6)
+    # denom=None keeps the normalised mean: weight cancels at batch size 1
+    a = weighted_token_ce(logits, labels, torch.tensor([1.0]))
+    b = weighted_token_ce(logits, labels, torch.tensor([2.0]))
+    assert a.item() == pytest.approx(b.item(), rel=1e-6)
