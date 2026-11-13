@@ -5,7 +5,6 @@ import time
 from functools import partial
 from pathlib import Path
 
-import torch
 from transformers import TrainingArguments
 
 from nodulecxr.data.split import oversample_indices, subsample_negatives
@@ -13,7 +12,7 @@ from nodulecxr.images import load_image
 from nodulecxr.records import read_manifest
 from nodulecxr.train.lora import WeightedSFTTrainer, make_lora_config
 from nodulecxr.train.sft_data import SFTDataset, collate
-from nodulecxr.vlm.hf import load_base
+from nodulecxr.vlm.hf import bf16_capable, load_base
 
 
 def main():
@@ -46,7 +45,7 @@ def main():
     model.print_trainable_parameters()
 
     ds = SFTDataset(train, processor, a.mode, lambda p: load_image(a.data_root, p), a.pos_weight, indices)
-    bf16 = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+    bf16 = bf16_capable()
     targs = TrainingArguments(
         output_dir=a.out, per_device_train_batch_size=1, gradient_accumulation_steps=a.grad_accum,
         num_train_epochs=a.epochs, learning_rate=a.lr, lr_scheduler_type="cosine", warmup_ratio=0.03,
