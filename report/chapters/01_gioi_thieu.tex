@@ -1,0 +1,97 @@
+% ============================================================================
+%  CHƯƠNG 1. GIỚI THIỆU
+% ============================================================================
+\section{Giới thiệu}
+\label{sec:intro}
+
+\subsection{Bối cảnh}
+
+Ung thư phổi là nguyên nhân tử vong do ung thư hàng đầu thế giới~\cite{bray2024globocan}. X-quang ngực
+(CXR) là xét nghiệm hình ảnh được chỉ định nhiều nhất, và nhiều ca ung thư phổi lần đầu lộ ra dưới dạng
+\emph{nốt} (đường kính $\le 3$\,cm) hoặc \emph{khối} ($> 3$\,cm) trên CXR. Nốt nhỏ, mờ hoặc bị xương sườn,
+tim che khuất rất dễ bị bỏ sót: trên các tập làm giàu ca bệnh, sensitivity của người đọc chỉ khoảng
+57--65\%~\cite{sim2020dcnn,ahn2022aiaided}, và với các ca ung thư từng bị bỏ sót trước đó chỉ còn
+40--53\%~\cite{jang2020dlad}.
+
+Các hệ thống CAD dựa trên CNN đã đạt AUROC 0,92--0,99 trên các tập ngoài~\cite{nam2019dlad}, và một thử
+nghiệm ngẫu nhiên có đối chứng cho thấy CAD làm tăng tỷ lệ phát hiện nốt cần xử trí từ 0,25\% lên
+0,59\%~\cite{nam2023rct}. Song song, các mô hình ngôn ngữ--thị giác (VLM) và LLM đa phương thức đang được
+giới thiệu như \emph{trợ lý đọc CXR}: chúng nhận ảnh, trả lời bằng ngôn ngữ tự nhiên và có thể giải thích.
+Câu hỏi thực tế đặt ra là: các trợ lý này có thật sự \emph{thấy} nốt phổi hay không?
+
+\subsection{Vấn đề}
+
+Các đánh giá độc lập năm 2026 cho câu trả lời đáng lo ngại:
+\begin{itemize}
+  \item Sáu VLM zero-shot trên 247 ảnh JSRT chỉ đạt sensitivity 0,6--27,3\%. MedGemma-4b-it đạt 5,2\%
+        (8/154) ở specificity 100\%; với nốt mờ nhất (độ mờ 1), mọi mô hình đều $\le 12\%$~\cite{nishio2026zeroshot}.
+  \item Chín hệ thống trên MosMedData VII (83 ảnh): AUC tốt nhất 0,743 (BiomedCLIP); LLM đa năng tốt nhất
+        (Claude 3.7 Sonnet) đạt AUC 0,625; CXR-LLaVA chỉ đạt sensitivity 0,079~\cite{khovanova2026comparative}.
+        Trên cùng nguồn dữ liệu, CAD CNN thương mại đạt AUC 0,956~\cite{arzamasov2024independent}.
+  \item Bốn MLLM đa năng chỉ phát hiện khoảng 10\% ca ác tính đơn ổ~\cite{chen2026limitations}; thêm ngữ
+        cảnh lâm sàng có cấu trúc giúp accuracy chung tăng, nhưng ung thư phổi vẫn chỉ đúng 20\%~\cite{cusick2026context}.
+\end{itemize}
+
+Kiểu sai phổ biến ở các VLM chuyên CXR là \textbf{chế độ báo bình thường} (\emph{normal-default mode}):
+specificity gần 1, sensitivity gần 0. Có hai giả thuyết bổ trợ nhau. Về thị giác, bộ mã hoá ViT làm mất tín
+hiệu tổn thương nhỏ ở bước gộp toàn cục; probe tuyến tính trên patch cục bộ lấy lại được tín hiệu, nâng AUC
+nốt của MedSigLIP từ 0,805 lên 0,955~\cite{muthyala2026frozen}. Về dữ liệu, báo cáo huấn luyện phần lớn là
+bình thường, nên mô hình nghiêng về câu trả lời ``không có bất thường'' --- một dạng \emph{học lối tắt} khi
+lớp dương hiếm.
+
+Đã có tiền lệ tinh chỉnh VLM/LLM trên CXR, nhưng cho tác vụ khác: QLoRA một VLM nhỏ để sinh báo
+cáo~\cite{volkov2025lora}, LoRA cho sinh báo cáo~\cite{gao2026s2d}, và tinh chỉnh Qwen2.5-VL cho grounding
+cụm từ tổng quát~\cite{xu2025medground}. Trong phạm vi 90 bài nhóm đã khảo sát, \textbf{chưa có nghiên cứu
+nào tinh chỉnh VLM cỡ nhỏ để phát hiện và định vị nốt/khối phổi trên CXR rồi so trực tiếp với CNN trên cùng
+cách chia dữ liệu}, và cũng chưa có nghiên cứu nào kiểm tra mô hình sau tinh chỉnh có nhìn đúng vị trí nốt hay không.
+
+\subsection{Mục tiêu}
+
+Đồ án xây dựng và đánh giá một \textbf{nguyên mẫu trợ lý AI} nhận một ảnh CXR, cho biết có nốt/khối phổi hay
+không và chỉ ra vị trí bằng bounding box. Trợ lý dựa trên VLM cỡ nhỏ (3--4 tỷ tham số) tinh chỉnh bằng LoRA,
+đủ nhẹ để huấn luyện trên một GPU Colab. Cụ thể:
+\begin{enumerate}
+  \item \textbf{Kiểm toán zero-shot có chuẩn hoá:} đánh giá MedGemma-4B và Qwen2.5-VL-3B với prompt chung,
+        đầu ra có cấu trúc, ngưỡng chọn trên validation và chạy lặp, đặt cạnh baseline CNN trên cùng split.
+  \item \textbf{Tinh chỉnh LoRA} cho hai bài toán: (a) có hay không có nốt/khối; (b) có nốt/khối kèm box.
+  \item \textbf{Chống chế độ báo bình thường:} so sánh LoRA chuẩn với LoRA cân bằng lớp.
+  \item \textbf{Kiểm tra trợ lý có nhìn đúng chỗ không:} định vị (IoU, hit rate), phép thử che nốt so với che
+        vùng ngẫu nhiên cùng diện tích, phân tầng theo kích thước và độ mờ của nốt.
+\end{enumerate}
+
+\begin{keybox}
+\textbf{Câu hỏi nghiên cứu chính.} (Q1) LoRA có đưa sensitivity của VLM, ở specificity 0,90, lên tối thiểu
+0,60 trên tập test trong phân phối không? (Q2) Cải thiện đó có còn khi kiểm tra ngoài phân phối (JSRT) và khi
+che nốt không?
+\end{keybox}
+
+Ngưỡng 0,60 nằm cùng khoảng với sensitivity của người đọc trên các tập làm giàu ca bệnh nêu trên, nhưng không
+mốc nào đo ở cùng điểm vận hành specificity 0,90. Vì vậy báo cáo \emph{không} so sánh ``ngang bác sĩ''; ngưỡng
+này cũng thấp hơn rõ so với CAD chuyên biệt~\cite{vanleeuwen2024commercial,lee2020dl}.
+
+\subsection{Đóng góp}
+
+\begin{enumerate}
+  \item \textbf{Benchmark nốt CXR chuẩn hoá cho VLM}, với prompt và parser công khai, chọn ngưỡng trên
+        validation và ba tập test (trong phân phối, ngoài phân phối, có phân cấp độ mờ) --- bản tái lập có kiểm
+        soát và quy mô lớn hơn của~\cite{khovanova2026comparative,nishio2026zeroshot}.
+  \item \textbf{Nguyên mẫu trợ lý dựa trên VLM cỡ nhỏ tinh chỉnh LoRA cho phát hiện và định vị nốt/khối phổi},
+        so trực tiếp với CNN classifier và detector trên cùng split; theo hiểu biết của nhóm, đây là bằng chứng
+        đầu tiên cho tác vụ này trong phạm vi tài liệu đã khảo sát.
+  \item \textbf{Phân tích chế độ báo bình thường và tác dụng của cân bằng lớp} khi tinh chỉnh VLM cho tổn
+        thương hiếm và nhỏ --- phần gắn trực tiếp với nội dung học có mất cân bằng lớp của môn học.
+  \item \textbf{Kiểm toán ``đúng vì đúng lý do''}: kết hợp IoU với phép che nốt so với che vùng ngẫu nhiên,
+        phân tầng theo kích thước và độ mờ.
+\end{enumerate}
+
+\begin{warnbox}
+\textbf{Phạm vi.} ``Trợ lý'' trong đồ án là \emph{nguyên mẫu nghiên cứu}. Kết quả không dùng cho quyết định
+lâm sàng và không được trình bày như một công cụ sẵn sàng triển khai (xem Mục~\ref{sec:conclusion}).
+\end{warnbox}
+
+\subsection{Cấu trúc báo cáo}
+
+Mục~\ref{sec:background} trình bày cơ sở lý thuyết và tổng quan tài liệu. Mục~\ref{sec:method} mô tả kiến trúc
+trợ lý, các cấu hình và quy trình huấn luyện. Mục~\ref{sec:data} mô tả dữ liệu. Mục~\ref{sec:results} trình
+bày thiết kế thí nghiệm, cách đánh giá và kết quả. Mục~\ref{sec:conclusion} kết luận, nêu hạn chế và hướng
+phát triển.

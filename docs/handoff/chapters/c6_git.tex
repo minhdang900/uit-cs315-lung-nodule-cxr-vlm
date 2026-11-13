@@ -1,0 +1,154 @@
+\section{Quy trình làm việc nhóm với Git/GitHub}
+\label{sec:git}
+
+\subsection{Mô hình nhánh (git-flow rút gọn)}
+
+\begin{itemize}
+\item \code{main}: bản ổn định, đã phát hành, có tag. Tag \code{v0.1.0-handoff} = trạng thái lúc bàn giao.
+\item \code{develop}: nhánh tích hợp. Mọi việc gộp vào đây trước.
+\item Nhánh làm việc, tách từ \code{develop}:
+  \begin{itemize}
+  \item \code{feature/<tên-ngắn>}: thay đổi code (ví dụ \code{feature/qwen-max-pixels-flag}).
+  \item \code{exp/<E\#-tên-ngắn>}: chạy thí nghiệm, chỉnh cấu hình (ví dụ \code{exp/E3-lora-medgemma}).
+  \item \code{docs/<tên>}: báo cáo, tài liệu (ví dụ \code{docs/fill-tab-main}).
+  \end{itemize}
+\item Gộp: mở \textbf{Pull Request} (PR) vào \code{develop} $\rightarrow$ review $\rightarrow$ squash hoặc merge.
+\item Phát hành: PR \code{develop} $\rightarrow$ \code{main}, rồi gắn tag (ví dụ \code{v0.2.0-results}).
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1.0cm,y=1.0cm,
+  cm/.style={circle,draw=#1,fill=white,line width=1.4pt,minimum size=0.32cm,inner sep=0},
+  ln/.style={line width=2pt,draw=#1}]
+\def\yM{3} \def\yD{2} \def\yF{1} \def\yE{0}
+\node[font=\scriptsize\bfseries,anchor=east,text=badred] at (-0.2,\yM) {main};
+\node[font=\scriptsize\bfseries,anchor=east,text=uitblue] at (-0.2,\yD) {develop};
+\node[font=\scriptsize\bfseries,anchor=east,text=okgreen] at (-0.2,\yF) {feature/\ldots};
+\node[font=\scriptsize\bfseries,anchor=east,text=warnorange] at (-0.2,\yE) {exp/E3-\ldots};
+\draw[ln=badred] (0,\yM) -- (12.8,\yM);
+\draw[ln=uitblue] (0.8,\yD) -- (12.8,\yD);
+\draw[ln=uitblue] (0,\yM) .. controls (0.4,\yM) and (0.4,\yD) .. (0.8,\yD);
+% feature
+\draw[ln=okgreen] (1.6,\yD) .. controls (2.0,\yD) and (2.0,\yF) .. (2.4,\yF) -- (4.2,\yF) .. controls (4.6,\yF) and (4.6,\yD) .. (5.0,\yD);
+% exp
+\draw[ln=warnorange] (5.6,\yD) .. controls (6.0,\yD) and (6.0,\yE) .. (6.4,\yE) -- (8.6,\yE) .. controls (9.0,\yE) and (9.0,\yD) .. (9.4,\yD);
+% release
+\draw[ln=uitblue] (10.6,\yD) .. controls (11.0,\yD) and (11.0,\yM) .. (11.4,\yM);
+\node[cm=badred] at (0,\yM) {};
+\node[font=\scriptsize,above=0.15cm] at (0,\yM) {v0.1.0-handoff};
+\node[cm=uitblue] at (0.8,\yD) {};
+\node[cm=okgreen] at (2.6,\yF) {}; \node[cm=okgreen] at (3.6,\yF) {};
+\node[font=\scriptsize,below=0.12cm] at (3.1,\yF) {feat: \ldots};
+\node[cm=uitblue] at (5.0,\yD) {}; \node[font=\scriptsize,above=0.12cm] at (5.0,\yD) {PR \#1};
+\node[cm=warnorange] at (6.7,\yE) {}; \node[cm=warnorange] at (7.5,\yE) {}; \node[cm=warnorange] at (8.3,\yE) {};
+\node[font=\scriptsize,below=0.12cm] at (7.5,\yE) {exp: C1--C3 seed 0..2};
+\node[cm=uitblue] at (9.4,\yD) {}; \node[font=\scriptsize,above=0.12cm] at (9.4,\yD) {PR \#2};
+\node[cm=uitblue] at (10.2,\yD) {}; \node[font=\scriptsize,below=0.12cm] at (10.2,\yD) {docs: điền bảng};
+\node[cm=badred] at (11.4,\yM) {};
+\node[font=\scriptsize,above=0.15cm] at (11.4,\yM) {v0.2.0-results};
+\end{tikzpicture}
+\caption{Mô hình nhánh. Không ai commit thẳng vào \code{main} hay \code{develop}.}
+\label{fig:gitgraph}
+\end{figure}
+
+\subsection{Các lệnh từng bước}
+
+\textbf{[GỢI Ý]} Lần đầu: clone và lấy nhánh \code{develop}:
+\begin{lstlisting}[language=bash]
+git clone https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git
+cd uit-cs315-lung-nodule-cxr-vlm
+git checkout develop
+git config user.name "Your Name"
+git config user.email "you@example.com"
+\end{lstlisting}
+
+Mỗi việc mới:
+\begin{lstlisting}[language=bash]
+git checkout develop
+git pull origin develop                    # always start from the latest develop
+git checkout -b feature/qwen-max-pixels-flag
+# ... edit code ...
+cd code && pytest -q && cd ..              # tests must pass before pushing
+git status                                 # check: no data, outputs, weights, tokens
+git add code/src/nodulecxr/vlm/hf.py code/tests/test_vlm.py
+git commit -m "feat: add max-pixels option for Qwen processor"
+git push -u origin feature/qwen-max-pixels-flag
+\end{lstlisting}
+
+Mở PR trên GitHub (\emph{Compare \& pull request}), base = \code{develop}. Hoặc dùng GitHub CLI:
+\begin{lstlisting}[language=bash]
+gh pr create --base develop --title "feat: add max-pixels option for Qwen" --body "Why, what changed, how tested"
+\end{lstlisting}
+
+Review và gộp:
+\begin{itemize}
+\item Ít nhất \textbf{một bạn khác} đọc PR. Người review kiểm tra: test qua; không có file cấm; lệnh mới có trong RUNBOOK; quyết định mới có trong \code{docs/decisions.md}.
+\item Gộp bằng \emph{Squash and merge} (một commit gọn) hoặc \emph{Merge}. Xóa nhánh sau khi gộp.
+\end{itemize}
+
+Phát hành:
+\begin{lstlisting}[language=bash]
+gh pr create --base main --head develop --title "release: v0.2.0-results"
+# after the PR is merged:
+git checkout main && git pull origin main
+git tag -a v0.2.0-results -m "E0-E5 results filled in report"
+git push origin v0.2.0-results
+\end{lstlisting}
+
+\subsection{Quy ước commit}
+
+Dùng \textbf{conventional commits}: \code{<loại>: <mô tả ngắn, thì hiện tại>}.
+
+\begin{center}
+\small
+\begin{tabularx}{\textwidth}{@{}l L l@{}}
+\toprule
+\textbf{Loại} & \textbf{Dùng khi} & \textbf{Ví dụ} \\
+\midrule
+\code{feat:} & thêm chức năng & \code{feat: add --official-test support to E0 docs} \\
+\code{fix:} & sửa lỗi & \code{fix: parse boxes when model returns bbox\_2d} \\
+\code{docs:} & báo cáo, sổ tay, RUNBOOK & \code{docs: fill tab:main from summary.csv} \\
+\code{exp:} & cấu hình/nhật ký thí nghiệm & \code{exp: E3 budget cut neg-per-pos 2} \\
+\code{chore:} & việc lặt vặt, cấu hình repo & \code{chore: update .gitignore} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{Những thứ không bao giờ commit}
+
+\begin{dangerbox}
+\begin{itemize}
+\item \textbf{Dữ liệu}: \code{data/}, ảnh \code{*.png} của bệnh nhân, \code{*.dcm}, \code{*.dicom}, file \code{.IMG}, file \code{.zip}. Lý do: giấy phép cấm phân phối lại.
+\item \textbf{Trọng số mô hình}: \code{*.pt}, \code{*.safetensors}, \code{*.ckpt}, thư mục adapter LoRA. Lý do: nặng, và có thể phải tuân điều khoản HAI-DEF.
+\item \textbf{Kết quả chạy}: \code{outputs/}. Lý do: lớn, sinh lại được; số liệu cần giữ thì chép vào báo cáo.
+\item \textbf{Bí mật}: HF token, GitHub PAT, \code{kaggle.json}, \code{.env}.
+\item \textbf{PDF có bản quyền}: bài báo trong \code{docs/lit-review/**/papers/}, giáo trình PDF ở gốc thư mục môn học.
+\item \textbf{Dữ liệu cá nhân}: file danh sách nhóm \code{*.xlsx}.
+\end{itemize}
+File \code{.gitignore} ở gốc repo chặn phần lớn các mẫu này: toàn bộ \code{data/} (trừ \code{data/README.md}), \code{outputs/}, \code{*.pt},
+\code{*.safetensors}, \code{*.ckpt}, \code{*.dcm}, \code{*.zip}, \code{.env}, \code{*.token}, \code{hf\_token*}, PDF ở gốc, \code{papers/}, \code{*.xlsx}.
+Nó \textbf{không} chặn \code{kaggle.json}, \code{*.dicom}, \code{*.IMG} nếu chúng nằm ngoài \code{data/}: đừng để các file đó trong repo. Đừng xóa các dòng có sẵn. Luôn chạy \code{git status} trước \code{git add}.
+Không dùng \code{git add -A} hay \code{git add .} khi chưa xem \code{git status}.
+\end{dangerbox}
+
+\begin{warnbox}
+\code{report/main.pdf} và \code{docs/handoff/so\_tay\_ban\_giao.pdf} \textbf{được} commit (\code{.gitignore} chỉ chặn PDF ở gốc repo).
+File phụ của LaTeX (\code{.aux}, \code{.log}, \code{.fdb\_latexmk}\ldots) bị chặn.
+\end{warnbox}
+
+\subsection{Ghi lại quyết định}
+
+Mọi quyết định thay đổi cách làm (đổi siêu tham số, cắt ngân sách, chọn cấu hình tốt nhất, bỏ một bộ dữ liệu\ldots)
+được ghi vào \code{docs/decisions.md}. Mỗi mục có: \textbf{mã} (D-số), \textbf{ngày}, \textbf{quyết định}, \textbf{lý do}, \textbf{nguồn}
+(spec mục nào, PR nào, file kết quả nào). Không sửa mục cũ; nếu đổi ý, thêm mục mới ghi ``thay thế D-x''.
+
+File đã có sẵn các quyết định của nhóm trước (D1--D27), lấy từ spec và §8.5. Ví dụ một mục mới:
+
+\begin{lstlisting}
+## D28 - 2026-12-02 - Best LoRA config for E4/E5 is C3
+- Decision: C3 is the best of C1-C3 (mean val_sens90 over 3 seeds: C1 0.41, C2 0.45, C3 0.52).
+- Reason: spec 8.5 - choose by mean val_sens90 in val_selection.csv, never by test.
+- Source: outputs/report/val_selection.csv (run 2026-12-01), PR #7.
+\end{lstlisting}
+(Số liệu trong ví dụ là giả. Trong file thật, viết bằng tiếng Việt như các mục có sẵn.)

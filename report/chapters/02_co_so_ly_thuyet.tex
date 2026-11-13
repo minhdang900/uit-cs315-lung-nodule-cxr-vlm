@@ -1,0 +1,211 @@
+% ============================================================================
+%  CHƯƠNG 2. CƠ SỞ LÝ THUYẾT VÀ TỔNG QUAN
+% ============================================================================
+\clearpage
+\section{Cơ sở lý thuyết và tổng quan tài liệu}
+\label{sec:background}
+
+\subsection{Nốt phổi trên X-quang ngực và hệ thống CAD}
+
+Nốt phổi là tổn thương mờ, tròn, đường kính tới 3\,cm; tổn thương lớn hơn gọi là khối. Trên CXR, nốt là tín
+hiệu nhỏ so với cả ảnh: một nốt 10\,mm chỉ chiếm vài chục pixel trên ảnh đã thu về 896$\times$896. CAD cho nốt
+trên CXR thường là CNN phân loại hoặc phát hiện đối tượng, huấn luyện trên box do bác sĩ vẽ. Các hệ thống này
+đạt AUROC 0,86--0,99 trên tập ngoài~\cite{nam2019dlad,vanleeuwen2024commercial,lee2020dl} và đã có bằng chứng
+lâm sàng từ RCT~\cite{nam2023rct}. Độ phân giải đầu vào ảnh hưởng rõ tới hiệu năng phát hiện tổn thương
+nhỏ~\cite{sabottke2020resolution}; với CAD nốt/khối, kích thước ma trận khoảng 896 là tối ưu~\cite{kim2020matrix}.
+
+\subsection{Mô hình ngôn ngữ--thị giác}
+
+Một VLM sinh văn bản gồm ba khối: (i) bộ mã hoá ảnh, thường là ViT~\cite{dosovitskiy2021vit}, biến ảnh thành
+chuỗi token thị giác; (ii) lớp chiếu đưa token thị giác vào không gian nhúng của LLM; (iii) LLM tự hồi quy sinh
+câu trả lời theo prompt. Với ảnh $x$, câu hỏi $q$ và câu trả lời $y = (y_1,\dots,y_T)$, mô hình học
+\begin{equation}
+  p_\theta(y \mid x, q) = \prod_{t=1}^{T} p_\theta\big(y_t \mid y_{<t},\, E(x),\, q\big),
+\end{equation}
+trong đó $E(x)$ là chuỗi token thị giác.
+
+Đồ án dùng hai VLM mở cỡ nhỏ:
+\begin{itemize}
+  \item \textbf{MedGemma-4B-it}~\cite{sellergren2026medgemma}: mô hình y khoa dựa trên Gemma~3, bộ mã hoá
+        MedSigLIP, nhận ảnh 896$\times$896. Zero-shot, nó là ví dụ điển hình của chế độ báo bình thường
+        (sensitivity 5,2\%, specificity 100\%~\cite{nishio2026zeroshot}).
+  \item \textbf{Qwen2.5-VL-3B-Instruct}~\cite{bai2025qwen25vl}: mô hình đa năng, độ phân giải động, có sẵn khả
+        năng xuất toạ độ box; đã được chứng minh học được grounding trên CXR sau tinh chỉnh~\cite{xu2025medground}.
+\end{itemize}
+
+\subsection{Thích ứng hạng thấp (LoRA)}
+
+Tinh chỉnh toàn bộ một VLM 4 tỷ tham số vượt quá ngân sách một GPU. LoRA~\cite{hu2022lora} giữ nguyên trọng số
+gốc $W_0 \in \mathbb{R}^{d\times k}$ và học một cập nhật hạng thấp:
+\begin{equation}
+  W = W_0 + \Delta W = W_0 + \frac{\alpha}{r}\, B A, \qquad B \in \mathbb{R}^{d\times r},\; A \in \mathbb{R}^{r\times k},\; r \ll \min(d,k).
+\end{equation}
+$A$ khởi tạo ngẫu nhiên, $B$ khởi tạo bằng 0 nên mô hình ban đầu trùng mô hình gốc. Với $r = 16$, số tham số
+cần học chỉ chiếm một phần rất nhỏ so với tham số mô hình.
+
+Đồ án gắn LoRA vào các lớp attention và MLP của LLM và \emph{đông cứng bộ mã hoá ảnh}. Đây là một câu hỏi lý
+thuyết đáng quan tâm: nếu tín hiệu nốt đã bị mất ở bước gộp của bộ mã hoá~\cite{muthyala2026frozen}, thì một
+cập nhật hạng thấp phía LLM có đủ để đưa tín hiệu cục bộ còn lại vào đầu ra ngôn ngữ hay không?
+Hình~\ref{fig:lora} tóm tắt cơ chế LoRA và vị trí gắn LoRA trong VLM. Với $\alpha = 32$ và $r = 16$, hệ số tỷ lệ
+$\alpha/r = 2$. LoRA chỉ gắn vào các phép chiếu \code{q/k/v/o\_proj} (attention) và \code{gate/up/down\_proj} (MLP)
+của LLM; mọi module của bộ mã hoá ảnh và lớp chiếu đa phương thức bị loại khỏi danh sách đích.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  % ---- trái: cơ chế LoRA ----
+  \node[fb, minimum width=1.6cm] (x) at (2.6,0) {$x \in \mathbb{R}^{k}$};
+  \node[fgray, minimum width=2.6cm, minimum height=2.3cm, text width=2.3cm] (W) at (1.2,2.3)
+       {$W_0 \in \mathbb{R}^{d\times k}$\\[2pt]\scriptsize đông cứng};
+  \draw[fill=uitblue!15, draw=uitblue] (3.3,1.3) -- (4.9,1.3) -- (4.5,1.95) -- (3.7,1.95) -- cycle;
+  \node[font=\footnotesize] at (4.1,1.62) {$A$\,{\scriptsize $r{\times}k$}};
+  \draw[fill=uitblue!15, draw=uitblue] (3.7,2.65) -- (4.5,2.65) -- (4.9,3.3) -- (3.3,3.3) -- cycle;
+  \node[font=\footnotesize] at (4.1,2.98) {$B$\,{\scriptsize $d{\times}r$}};
+  \node[fnote, anchor=west] at (4.95,1.62) {$A \sim \mathcal{N}(0,\sigma^2)$};
+  \node[fnote, anchor=west] at (4.95,2.98) {$B = 0$ lúc đầu};
+  \node[fnote, anchor=west] at (4.95,2.3) {$r = 16$};
+  \node[draw=black!60, circle, inner sep=0.5pt, font=\small] (plus) at (2.6,4.3) {$+$};
+  \node[fb, minimum width=1.9cm] (h) at (2.6,5.25) {$h = W_0x + \tfrac{\alpha}{r}BAx$};
+  \draw[farr] (x.north) -- ++(0,0.35) -| (W.south);
+  \draw[farr] (x.north) -- ++(0,0.35) -| (4.1,1.3);
+  \draw[farr] (4.1,1.95) -- (4.1,2.65);
+  \draw[farr] (W.north) |- (plus.west);
+  \draw[farr] (4.1,3.3) |- node[fnote, pos=0.75, above] {$\times\,\alpha/r{=}2$} (plus.east);
+  \draw[farr] (plus) -- (h);
+  % ---- phải: vị trí gắn trong VLM ----
+  \node[fgray, text width=4.4cm, minimum height=0.8cm] (ve) at (11.0,0.2) {Bộ mã hoá ảnh SigLIP/ViT\\\scriptsize đông cứng, không LoRA};
+  \node[fgray, text width=4.4cm, minimum height=0.8cm] (pj) at (11.0,1.62) {Lớp chiếu đa phương thức\\\scriptsize đông cứng, không LoRA};
+  \node[fb, text width=5.0cm, minimum height=2.65cm, anchor=south] (llm) at (11.0,2.55) {};
+  \node[font=\footnotesize\bfseries, anchor=north] at (llm.north) {LLM (khối decoder $\times N$)};
+  \node[fblue, text width=1.95cm, minimum height=1.25cm] (att) at (9.75,3.65) {Attention\\\scriptsize q, k, v, o\\+ LoRA};
+  \node[fblue, text width=1.95cm, minimum height=1.25cm] (mlp) at (12.25,3.65) {MLP\\\scriptsize gate, up, down\\+ LoRA};
+  \draw[farr] (ve) -- (pj); \draw[farr] (pj) -- (llm.south);
+  \draw[farr] (att) -- (mlp);
+  \node[fb, text width=2.4cm] (out) at (11.0,5.95) {câu trả lời JSON};
+  \draw[farr] (llm.north) -- (out);
+  \node[fnote, anchor=north] at (11.0,-0.45) {chỉ ma trận $A$, $B$ (ô xanh) được cập nhật};
+\end{tikzpicture}
+\caption{LoRA trong đồ án. Trái: trọng số gốc $W_0$ đông cứng; cập nhật hạng thấp $\Delta W = \frac{\alpha}{r}BA$
+với $r = 16$, $\alpha = 32$, dropout 0,05; $B$ khởi tạo bằng 0 nên mô hình ban đầu trùng mô hình gốc. Phải: LoRA
+chỉ gắn vào attention và MLP của LLM; bộ mã hoá ảnh và lớp chiếu đông cứng.}
+\label{fig:lora}
+\end{figure}
+
+\subsection{Mất cân bằng lớp và học lối tắt}
+
+Gọi $\pi = P(Y{=}1)$ là tỷ lệ ca dương. Trong VinBigData, $\pi \approx 2{,}7\%$~\cite{nguyen2022vindr}. Với
+ERM dùng loss 0--1, bộ phân loại hằng ``luôn trả lời không'' có rủi ro $\pi$, tức accuracy $1-\pi \approx 97\%$
+--- một nghiệm cục bộ rất hấp dẫn. Khi huấn luyện VLM bằng cross-entropy trên token, hiện tượng tương tự xuất
+hiện ở token trả lời ``yes''/``no''; một nghiên cứu ghi nhận tinh chỉnh trên ChestX-ray14 làm sensitivity giảm
+dưới 15\%~\cite{fisher2025vlfm}.
+
+Hai biện pháp kinh điển của học có chi phí (cost-sensitive learning) được dùng trong đồ án:
+\begin{itemize}
+  \item \textbf{Lấy mẫu lại:} oversampling ca dương tới tỷ lệ 1:1 trong mỗi epoch, tương đương thay phân phối
+        huấn luyện để $\pi' = 0{,}5$.
+  \item \textbf{Trọng số loss:} nhân loss của token trả lời với trọng số $w_{+}$ cho ca dương:
+  \begin{equation}
+    \mathcal{L} = -\sum_{i} w(y_i) \sum_{t \in \mathcal{A}_i} \log p_\theta\big(y_{i,t} \mid y_{i,<t}, x_i, q\big),
+  \end{equation}
+  trong đó $\mathcal{A}_i$ là tập vị trí token thuộc câu trả lời.
+\end{itemize}
+Lấy mẫu lại làm lệch xác suất đầu ra so với tỷ lệ thật, nên ngưỡng quyết định phải chọn lại trên validation và
+cần đánh giá calibration~\cite{mosquera2024imbalance}.
+
+\subsection{Đánh giá chẩn đoán}
+
+\begin{itemize}
+  \item \textbf{Mức ảnh:} sensitivity, specificity, PPV, NPV, đường ROC và AUC. Khi lớp dương hiếm, AUC-ROC có
+        thể lạc quan; AUC-PR và calibration (ECE, Brier) bổ sung thông tin~\cite{mosquera2024imbalance}. PPV phụ
+        thuộc tỷ lệ bệnh: $\text{PPV} = \frac{\text{Se}\,\pi}{\text{Se}\,\pi + (1-\text{Sp})(1-\pi)}$.
+  \item \textbf{Điểm vận hành:} sensitivity ở specificity cố định (0,90 và 0,95), ngưỡng chọn trên validation.
+  \item \textbf{Định vị:} IoU giữa box dự đoán và box chuẩn; FROC biểu diễn sensitivity mức tổn thương theo số
+        dương tính giả trên mỗi ảnh.
+  \item \textbf{So sánh bắt cặp:} McNemar cho sensitivity/specificity, DeLong~\cite{delong1988} cho AUC,
+        hiệu chỉnh Holm khi so nhiều cặp; khoảng tin cậy 95\% bằng bootstrap theo ảnh.
+\end{itemize}
+
+Hình~\ref{fig:oppoint} giải thích vì sao đồ án chọn chỉ số chính là sensitivity ở specificity 0,90 thay vì
+accuracy hay sensitivity ở một ngưỡng mặc định. Khi tăng ngưỡng $t$, specificity tăng còn sensitivity giảm. Một
+mô hình ở chế độ báo bình thường nằm ở góc dưới trái của ROC: specificity gần 1 nhưng gần như không phát hiện
+được ca dương. Cố định specificity 0,90 cho phép so mọi mô hình, VLM hay CNN, ở cùng một mức báo động giả. Tiêu chí
+thành công của đồ án là sensitivity $\ge 0{,}60$ tại điểm này trên VinBigData test.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+  \pgfmathdeclarefunction{Phi}{1}{\pgfmathparse{1/(1+exp(-1.702*#1))}}
+  \begin{axis}[name=left, width=7.3cm, height=5.6cm, xmin=-2.5, xmax=4.5, ymin=0, ymax=1.05,
+      xlabel={ngưỡng $t$}, ylabel={giá trị}, font=\footnotesize, axis lines=left,
+      legend style={at={(0.98,0.45)}, anchor=east, draw=none, fill=white, fill opacity=0.85, text opacity=1, font=\scriptsize},
+      every axis plot/.style={very thick, samples=120}]
+    \addplot[domain=-2.5:4.5, badred] {1-Phi(x-1.8)};
+    \addlegendentry{sensitivity}
+    \addplot[domain=-2.5:4.5, okgreen] {Phi(x)};
+    \addlegendentry{specificity}
+    \draw[warnorange, thick, dashed] (axis cs:1.29,0) -- (axis cs:1.29,1.0);
+    \draw[black!40, thin] (axis cs:-2.5,0.90) -- (axis cs:1.29,0.90);
+    \node[font=\scriptsize, text=warnorange, anchor=south west] at (axis cs:1.32,0.0) {$t_{90}$};
+    \node[font=\scriptsize, anchor=east, text=black!60] at (axis cs:-0.4,0.95) {spec $=0{,}90$};
+    \fill[badred] (axis cs:1.29,0.705) circle (2pt);
+    \node[font=\scriptsize, text=badred, anchor=west] at (axis cs:1.38,0.74) {sens $\approx 0{,}70$};
+  \end{axis}
+  \begin{axis}[at={(left.east)}, anchor=west, xshift=1.3cm, width=6.4cm, height=5.6cm,
+      xmin=0, xmax=1, ymin=0, ymax=1.02, xlabel={$1-$ specificity}, ylabel={sensitivity},
+      font=\footnotesize, axis lines=left, every axis plot/.style={samples=160}]
+    \fill[okgreen!12] (axis cs:0,0.60) rectangle (axis cs:0.10,1.0);
+    \addplot[very thick, uitblue, domain=-4:6, variable=\t] ({1-Phi(\t)}, {1-Phi(\t-1.8)});
+    \addplot[thin, black!35, dashed, domain=0:1] {x};
+    \draw[warnorange, thick, dashed] (axis cs:0.10,0) -- (axis cs:0.10,1.0);
+    \draw[badred, thick, dashed] (axis cs:0,0.60) -- (axis cs:1,0.60);
+    \fill[uitblue] (axis cs:0.10,0.705) circle (2pt);
+    \node[font=\scriptsize, anchor=west, text=uitblue] at (axis cs:0.13,0.74) {điểm vận hành};
+    \node[font=\scriptsize, anchor=west, text=badred] at (axis cs:0.45,0.56) {mục tiêu $0{,}60$};
+    \fill[black!70] (axis cs:0.0,0.05) circle (2pt);
+    \node[font=\scriptsize, anchor=west, text=black!70, align=left] at (axis cs:0.04,0.12) {chế độ báo\\bình thường};
+    \node[font=\scriptsize, text=okgreen!60!black, rotate=90] at (axis cs:0.05,0.80) {đạt};
+  \end{axis}
+\end{tikzpicture}
+\caption{Minh hoạ khái niệm, dùng đường cong tổng hợp (mô hình hai phân phối chuẩn), \textbf{không phải kết quả}
+của đồ án. Trái: sensitivity và specificity theo ngưỡng; $t_{90}$ là ngưỡng cho specificity 0,90. Phải: đường
+ROC; vùng xanh là vùng đạt tiêu chí (specificity $\ge 0{,}90$, sensitivity $\ge 0{,}60$); chấm đen là một mô
+hình ở chế độ báo bình thường.}
+\label{fig:oppoint}
+\end{figure}
+
+\subsection{Tổng quan tài liệu và khoảng trống}
+
+Nhóm khảo sát 90 bài từ arXiv, PubMed, Semantic Scholar, OpenAlex, Europe PMC, Consensus, Undermind và Scopus
+(giới hạn ở tạp chí uy tín). Mức đọc: 34 bài toàn văn, 53 bài tóm tắt, 3 bài chỉ tiêu đề.
+Bảng~\ref{tab:gap} tóm tắt khoảng trống.
+
+\begin{table}[H]
+\centering
+\caption{Những gì đã có và khoảng trống đồ án nhắm tới.}
+\label{tab:gap}
+\small
+\begin{tabularx}{\textwidth}{@{}p{3.2cm} L L@{}}
+\toprule
+\textbf{Việc} & \textbf{Đã có} & \textbf{Còn trống} \\
+\midrule
+Đánh giá VLM zero-shot cho nốt CXR & 83--247 ảnh, một nguồn, prompt khác nhau; \cite{khovanova2026comparative}
+chọn ngưỡng trên tập test, \cite{nishio2026zeroshot} chỉ có đầu ra nhị phân & Đánh giá chuẩn hoá, nhiều tập, có CNN
+trên cùng split \\
+\addlinespace
+Tinh chỉnh VLM/LLM trên CXR & Cho sinh báo cáo~\cite{volkov2025lora,gao2026s2d} hoặc grounding tổng
+quát~\cite{xu2025medground} & LoRA VLM nhỏ cho phát hiện và định vị nốt/khối, so với CNN \\
+\addlinespace
+Định vị nốt bằng VLM & Gộp thành ``lung lesion''~\cite{gosai2025beyond}; không có nốt/khối~\cite{choi2026chexpercept}
+& Định vị riêng nốt/khối, sau tinh chỉnh \\
+\addlinespace
+Phân tầng kích thước, độ mờ & Theo độ mờ JSRT nhưng chỉ zero-shot~\cite{nishio2026zeroshot}; CAD~\cite{pesce2019lesion,kim2020matrix}
+& Phân tầng có hệ thống, trước và sau tinh chỉnh \\
+\addlinespace
+Cơ chế bỏ sót nốt nhỏ & Probe trên embedding đông cứng~\cite{muthyala2026frozen} & Kiểm chứng trên VLM sinh văn bản sau tinh chỉnh \\
+\addlinespace
+Đánh giá theo tỷ lệ bệnh & Nghiên cứu VLM chỉ báo accuracy, sens/spec & AUC-PR, calibration, PPV ở tỷ lệ bệnh thực tế \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Các khoảng trống trên đúng trong phạm vi 90 bài đã khảo sát; đó không phải bằng chứng tuyệt đối rằng chưa ai làm.

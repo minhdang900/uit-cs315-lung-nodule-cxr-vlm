@@ -1,0 +1,53 @@
+# ---- Không bao giờ commit: tài liệu có bản quyền, dữ liệu cá nhân, dữ liệu y tế ----
+/*.pdf
+*.xlsx
+*.xls
+docs/lit-review/**/papers/
+/data/*
+!/data/README.md
+outputs/
+*.pt
+*.safetensors
+*.ckpt
+*.dcm
+*.dicom
+*.IMG
+*.img
+*.zip
+
+# ---- Bí mật ----
+.env
+kaggle.json
+*.token
+hf_token*
+
+# ---- Python ----
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ---- LaTeX (giữ lại main.pdf và so_tay_ban_giao.pdf) ----
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.xdv
+*.bbl
+*.blg
+*.run.xml
+*.bcf
+
+# ---- Công cụ / hệ điều hành ----
+.DS_Store
+.omc/
+.superpowers/
+.claude/
+.vscode/
+.idea/

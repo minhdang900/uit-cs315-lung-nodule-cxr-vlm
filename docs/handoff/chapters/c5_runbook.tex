@@ -1,0 +1,566 @@
+\section{Runbook từng bước}
+\label{sec:runbook}
+
+\begin{keybox}
+\textbf{Nguồn lệnh.} Các khối lệnh đánh dấu \textbf{[RUNBOOK]} được chép nguyên từ \code{code/RUNBOOK.md}
+(chỉ bỏ hoặc dịch sang tiếng Anh không dấu các chú thích tiếng Việt, vì listings không in được chữ có dấu).
+Khối đánh dấu \textbf{[DỰNG TỪ ARGPARSE]} do sổ tay ghép từ các cờ có thật trong \code{code/scripts/*.py} theo đúng quy tắc RUNBOOK.
+Khối đánh dấu \textbf{[GỢI Ý]} là lệnh ngoài pipeline (tải dữ liệu, git\ldots), bạn nên kiểm tra lại.
+Nếu RUNBOOK được cập nhật, \textbf{RUNBOOK thắng}.
+\end{keybox}
+
+% ===========================================================================
+\subsection{Môi trường trên máy cá nhân (CPU)}
+\label{sec:env-local}
+
+Dùng để chạy kiểm thử và sửa code. Không cần GPU. Cần Python $\ge 3.9$ (\code{pyproject.toml}).
+
+\textbf{[GỢI Ý]} (macOS/Linux; Windows dùng \code{.venv\textbackslash Scripts\textbackslash activate}):
+\begin{lstlisting}[language=bash]
+cd uit-cs315-lung-nodule-cxr-vlm/code
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q
+\end{lstlisting}
+
+\textbf{Kết quả mong đợi}: dòng cuối có \code{75 passed} (khi đã có torch, xem hộp dưới). Các nhóm phụ thuộc trong \code{pyproject.toml}:
+\code{dev} = pytest; \code{torchcpu} = torch (CPU); \code{gpu} = torch, transformers, peft, accelerate, torchxrayvision, ultralytics.
+Kiểm thử CPU không cần nhóm \code{gpu}.
+
+\begin{warnbox}
+\code{tests/test\_train.py} và một test trong \code{tests/test\_vlm.py} dùng \code{pytest.importorskip("torch")}: nếu máy chưa có \code{torch},
+các test đó bị \emph{bỏ qua} (skipped) thay vì chạy. Để thấy đủ 75 passed, cài thêm torch bản CPU:
+\code{pip install -e ".[dev,torchcpu]"} rồi chạy lại \code{pytest -q}.
+\end{warnbox}
+
+% ===========================================================================
+\subsection{Clone repo vào Google Drive}
+\label{sec:clone}
+
+Colab đọc code và dữ liệu từ Google Drive. Repo là private, nên bạn cần (1) được mời làm collaborator, (2) quyền xác thực GitHub:
+một \textbf{Personal Access Token} \en{PAT} hoặc \code{gh auth login} (RUNBOOK §0).
+
+\textbf{[RUNBOOK] Lần đầu tiên} (chạy một lần duy nhất, trong một ô Colab): clone repo vào \code{/content/drive/MyDrive}.
+\begin{lstlisting}[language=Python]
+from google.colab import drive
+drive.mount('/content/drive')
+%cd /content/drive/MyDrive
+!git clone https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git
+\end{lstlisting}
+Kết quả: bản clone nằm ở \code{/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm}. Mỗi phiên sau đó đặt
+\code{REPO} bằng đường dẫn này (§\ref{sec:session}). Nếu bạn clone vào chỗ khác, chỉ cần đổi giá trị \code{REPO}.
+
+\begin{warnbox}
+\textbf{Xác thực khi clone repo private [GỢI Ý].} \code{git clone} sẽ hỏi tên người dùng và mật khẩu; mật khẩu là PAT, không phải mật khẩu GitHub.
+Nếu ô Colab không cho nhập, đặt PAT vào Colab Secrets (ví dụ tên \code{GH\_TOKEN}) và clone bằng
+\code{https://\{tok\}@github.com/...} với \code{tok = userdata.get("GH\_TOKEN")}. Sau đó chạy
+\code{git remote set-url origin https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git} trong thư mục repo
+để token không nằm lại trong \code{.git/config}. Không bao giờ dán token thẳng vào notebook.
+\end{warnbox}
+
+\textbf{Cách khác [GỢI Ý]}: trên máy có Google Drive for Desktop, clone vào thư mục \code{My Drive} đã đồng bộ; kết quả giống hệt.
+
+\textbf{Thư mục dữ liệu.} Trong bản clone có \code{data/README.md}. Dữ liệu nằm ở \code{\$REPO/data/raw/} (tải về) và
+\code{\$REPO/data/processed/} (do \code{prepare\_*} tạo). Cả hai bị gitignore; chỉ \code{data/README.md} vào git.
+
+% ===========================================================================
+\subsection{Quyền tải MedGemma và HF token}
+\label{sec:hf}
+
+\begin{enumerate}
+\item Tạo tài khoản \url{https://huggingface.co}.
+\item Mở trang \code{google/medgemma-4b-it}. Đọc và chấp nhận điều khoản \textbf{Health AI Developer Foundations (HAI-DEF)}. Chờ được cấp quyền (thường ngay lập tức, có thể lâu hơn).
+\item Vào \emph{Settings $\rightarrow$ Access Tokens}, tạo token (quyền \emph{Read} là đủ để tải model).
+\item Trong Colab: biểu tượng chìa khóa (\emph{Secrets}) ở thanh bên trái $\rightarrow$ \emph{Add new secret}, tên \code{HF\_TOKEN}, dán token, bật \emph{Notebook access}.
+\end{enumerate}
+Qwen2.5-VL-3B-Instruct không cần chấp nhận điều khoản riêng, nhưng vẫn tải qua cùng token.
+
+\begin{dangerbox}
+Không bao giờ dán token vào notebook, code, hay commit. Nếu lỡ lộ token: vào Hugging Face thu hồi \en{revoke} ngay và tạo token mới.
+\end{dangerbox}
+
+% ===========================================================================
+\subsection{Colab và GPU}
+\label{sec:colab}
+
+\begin{itemize}
+\item Cần \textbf{Colab Pro} (hoặc gói trả phí tương đương) để chọn GPU \textbf{L4} hoặc \textbf{A100}.
+      \emph{Runtime $\rightarrow$ Change runtime type $\rightarrow$ GPU}.
+\item \textbf{Không dùng T4.} MedGemma cần bf16 thật (compute capability $\ge 8$). Trên T4 (7.5), \code{load\_base} ném lỗi
+      \code{RuntimeError: MedGemma needs a bf16-capable GPU (L4/A100); fp16 overflows}.
+\item Colab tính phí theo ``compute unit''. Ngân sách thật phải đo bằng kiểm tra mục 7 và pilot E3, rồi ghi vào \code{outputs/budget.md}.
+\end{itemize}
+
+\begin{unsurebox}
+Người bàn giao chưa chạy GPU lần nào, nên \textbf{chưa có số giờ GPU hay số compute unit thực tế}. Spec §7 chỉ đặt quy tắc:
+nếu một lượt MedGemma vượt 3 giờ thì cắt giảm theo thứ tự (xem §\ref{sec:budget}).
+\end{unsurebox}
+
+% ===========================================================================
+\subsection{Tải dữ liệu}
+\label{sec:data}
+
+\begin{dangerbox}
+\textbf{Giấy phép dữ liệu.} Cả ba bộ chỉ được dùng cho nghiên cứu/học thuật theo điều khoản riêng của từng bộ.
+\textbf{Không phân phối lại ảnh} (không commit, không đưa lên Drive công khai, không gửi cho người ngoài nhóm).
+Phải trích dẫn nguồn trong báo cáo. Hãy đọc nguyên văn điều khoản trên trang của từng bộ; sổ tay này không thay thế điều khoản.
+Spec ``Việc phải làm đầu tiên'' mục 1 yêu cầu xác nhận điều khoản trước khi dùng.
+\end{dangerbox}
+
+Bố cục dữ liệu (theo \code{data/README.md}): tải dữ liệu thô vào \code{data/raw/} (gợi ý mỗi bộ một thư mục con:
+\code{data/raw/vinbig/}, \code{data/raw/nih/}, \code{data/raw/jsrt/}); \code{prepare\_*} ghi kết quả vào \code{data/processed/}.
+Cả hai bị gitignore. Nếu bộ thô quá lớn so với dung lượng Drive (ví dụ VinBigData DICOM), có thể tải vào ổ tạm \code{/content/raw/}
+của Colab (mất khi hết phiên) và chỉ để \code{data/processed/} trên Drive.
+
+\subsubsection{VinBigData (huấn luyện, validation, test trong phân phối)}
+
+\begin{itemize}
+\item Nguồn: cuộc thi Kaggle \code{vinbigdata-chest-xray-abnormalities-detection}. Phải bấm chấp nhận luật cuộc thi \en{rules} trước khi tải.
+\item Cần file \code{train.csv} (một dòng một box của một bác sĩ: \code{image\_id, class\_name, rad\_id, x\_min, y\_min, x\_max, y\_max};
+      code chấp nhận cả \code{rad\_ID}) và ảnh train.
+\item Ảnh gốc là DICOM, tên \code{<image\_id>.dicom}. Bộ gốc rất lớn (cỡ hàng trăm GB, kiểm tra trên trang Kaggle).
+\item \textbf{Bản PNG đã thu nhỏ được hỗ trợ}: \code{prepare\_vinbig.py} có \code{--png-dir} và \code{--meta-csv}.
+      Bản PNG phải đi kèm một CSV chứa \code{image\_id} và \textbf{kích thước gốc} của ảnh (để quy đổi tọa độ box trong \code{train.csv}).
+      Mặc định cột chiều cao là \code{dim0}, chiều rộng là \code{dim1} (đổi bằng \code{--h-col}, \code{--w-col}).
+      Ảnh PNG phải tên \code{<image\_id>.png}.
+\end{itemize}
+
+\begin{unsurebox}
+Sổ tay chưa kiểm chứng tên bộ PNG cụ thể trên Kaggle. Các bộ cộng đồng kiểu ``vinbigdata chest xray resized png'' thường có
+\code{train\_meta.csv} với cột \code{dim0}, \code{dim1}; hãy mở file kiểm tra: (1) \code{dim0}/\code{dim1} là kích thước \emph{gốc}, không phải kích thước PNG;
+(2) \code{train.csv} đi kèm còn tọa độ gốc. Nếu sai, box sẽ lệch: \code{draw\_boxes.py} ở E0 sẽ cho thấy.
+\end{unsurebox}
+
+\textbf{Tùy chọn: tập test chính thức VinDr-CXR.} \code{prepare\_vinbig.py} có \code{--official-test-csv} và \code{--official-test-dicom}.
+Khi dùng, VinBigData Kaggle được chia 85/15 (train/val) và tập test chính thức trở thành \code{test}. Phần này đọc DICOM bắt buộc.
+Spec §6 ưu tiên dùng tập này nếu truy cập được (3.000 ảnh, 176 ảnh Nodule/Mass).
+
+\begin{unsurebox}
+Tập test VinDr-CXR nằm trên PhysioNet (cần tài khoản được xác thực). Sổ tay chưa kiểm chứng file nhãn test có cùng cột với \code{train.csv}
+(đặc biệt cột \code{rad\_id}) hay không. Code gom box theo \code{rad\_id}; hãy kiểm tra trước khi chạy.
+\end{unsurebox}
+
+\subsubsection{NIH ChestX-ray14 (test ngoài phân phối 1)}
+
+\begin{itemize}
+\item Nguồn: NIH Clinical Center (trang tải chính thức), hoặc bản Kaggle của bộ này.
+\item \code{prepare\_nih.py --raw-dir} cần trong thư mục đó (code tìm đệ quy):
+  \begin{itemize}
+  \item \code{Data\_Entry\_2017.csv} (cột dùng: \code{Image Index}, \code{Finding Labels}, \code{Patient ID});
+  \item \code{BBox\_List\_2017.csv} (cột: \code{Image Index}, \code{Finding Label}, \code{Bbox [x}, \code{y}, \code{w}, \code{h]});
+  \item ảnh \code{*.png} (1024$\times$1024), có thể nằm trong các thư mục con.
+  \end{itemize}
+\item \textbf{Phải tải toàn bộ ảnh}, không chỉ ảnh có box: ảnh âm được rút ngẫu nhiên (\code{seed=0}) từ \emph{mọi} ảnh ``No Finding'' của bệnh nhân không có ảnh dương,
+      số lượng gấp \code{--neg-ratio} (mặc định 3) lần số ảnh dương. Thiếu ảnh sẽ gây \code{KeyError}.
+\end{itemize}
+
+\subsubsection{JSRT (test ngoài phân phối 2, có độ mờ)}
+
+\begin{itemize}
+\item Nguồn: Japanese Society of Radiological Technology, đăng ký tại \url{http://db.jsrt.or.jp/eng.php} (hoặc trang jsrt.or.jp).
+\item 247 ảnh: 154 có nốt (\code{JPCLN*.IMG}), 93 không có nốt (\code{JPCNN*.IMG}). Ảnh thô 2048$\times$2048, 16 bit, big-endian (\code{images.py}).
+\item \code{prepare\_jsrt.py --raw-dir} cần: \code{CLNDAT\_EN.txt}, \code{NNDAT\_EN.txt} (đúng tên này, ở ngay trong \code{--raw-dir}) và các file \code{.IMG} (tìm đệ quy).
+\end{itemize}
+
+\begin{unsurebox}
+Tên \code{CLNDAT\_EN.txt}/\code{NNDAT\_EN.txt} được viết cứng trong \code{prepare\_jsrt.py}. Sổ tay chưa kiểm chứng gói tải hiện tại của JSRT
+dùng đúng tên này. Nếu khác, đổi tên file cho khớp (đừng sửa code nếu không cần). Parser bỏ qua dòng không bắt đầu bằng \code{JPCLN}/\code{JPCNN}.
+\end{unsurebox}
+
+\subsubsection{Lệnh tải gợi ý}
+
+\textbf{[GỢI Ý]} Kaggle CLI cần file API token \code{kaggle.json} (Kaggle $\rightarrow$ Settings $\rightarrow$ API). Không commit file này.
+\begin{lstlisting}[language=bash]
+pip install -q kaggle
+mkdir -p ~/.kaggle && cp kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+kaggle competitions download -c vinbigdata-chest-xray-abnormalities-detection -p ../data/raw/vinbig
+\end{lstlisting}
+
+% ===========================================================================
+\subsection{Chuẩn bị dữ liệu (phần đầu E0)}
+\label{sec:prepare}
+
+Chạy từ \code{code/}, với \code{M=../data/processed}. Các script này chỉ cần CPU (có thể chạy trên Colab CPU hoặc máy cá nhân có đủ dữ liệu).
+RUNBOOK chỉ liệt kê cờ bắt buộc; dưới đây là lệnh đầy đủ \textbf{[DỰNG TỪ ARGPARSE]}, đường dẫn \code{../data/raw/...} theo bố cục ở trên (đổi nếu bạn để dữ liệu chỗ khác):
+
+\begin{lstlisting}[language=bash]
+%%bash
+export M=../data/processed
+# VinBigData, PNG variant (needs original sizes in --meta-csv)
+python scripts/prepare_vinbig.py --train-csv ../data/raw/vinbig/train.csv --png-dir ../data/raw/vinbig/train --meta-csv ../data/raw/vinbig/train_meta.csv --out-root $M
+# ... OR VinBigData, DICOM (sizes are read from the DICOM headers)
+# python scripts/prepare_vinbig.py --train-csv ../data/raw/vinbig/train.csv --dicom-dir ../data/raw/vinbig/train --out-root $M
+python scripts/prepare_nih.py --raw-dir ../data/raw/nih --out-root $M
+python scripts/prepare_jsrt.py --raw-dir ../data/raw/jsrt --out-root $M
+\end{lstlisting}
+
+\textbf{Kết quả mong đợi}
+\begin{itemize}
+\item Trong \code{data/processed/}: \code{manifest\_vinbig.csv}, \code{manifest\_nih.csv}, \code{manifest\_jsrt.csv} và các thư mục \code{vinbig/}, \code{nih/}, \code{jsrt/} chứa PNG 896$\times$896 xám.
+\item \code{prepare\_vinbig.py} in bảng \code{count}/\code{sum} theo split: tỷ lệ \code{train:val:test} xấp xỉ 70:10:20, tỷ lệ dương trong mỗi split gần bằng nhau (chia phân tầng).
+\item \code{prepare\_nih.py} in số ảnh nhãn 1 và nhãn 0; nhãn 0 gấp 3 lần nhãn 1 (nếu đủ ảnh âm).
+\item \code{prepare\_jsrt.py} in \code{1: 154}, \code{0: 93}.
+\end{itemize}
+
+\begin{unsurebox}
+Spec ghi 410/15.000 ảnh Nodule/Mass (theo bài báo VinDr-CXR). Code coi một ảnh là dương nếu \emph{ít nhất một} bác sĩ khoanh Nodule/Mass,
+và coi \emph{mọi} ảnh còn lại là âm (kể cả ảnh có bệnh khác, tức ``âm khó''). Vì vậy số ca dương thật có thể khác 410. Ghi con số thật vào E0 và báo cáo.
+\end{unsurebox}
+
+% ===========================================================================
+\subsection{Mỗi phiên Colab (RUNBOOK §0)}
+\label{sec:session}
+
+\textbf{[RUNBOOK]} Ô Python đầu tiên của mỗi phiên. Đổi \code{REPO} nếu bạn clone vào chỗ khác (§\ref{sec:clone}):
+\begin{lstlisting}[language=Python]
+from google.colab import drive, userdata
+drive.mount('/content/drive')
+REPO = "/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm"
+%cd {REPO}/code
+import os; os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")   # from Colab Secrets
+!pip install -q -e ".[gpu]"
+!huggingface-cli login --token $HF_TOKEN
+!mkdir -p /content/data && rsync -a ../data/processed/ /content/data/   # read images from local disk
+\end{lstlisting}
+
+\textbf{Giải thích từng dòng.} Gắn Drive; đặt \code{REPO} và chuyển vào \code{\$REPO/code}; nạp token vào biến môi trường; cài gói cùng nhóm \code{gpu};
+đăng nhập Hugging Face; chép ảnh đã xử lý từ Drive sang ổ local \code{/content/data} (đọc từ Drive rất chậm).
+
+Biến shell không giữ qua các dòng \code{!}. Vì vậy mọi ô chạy lệnh phải là ô \code{\%\%bash} và bắt đầu bằng \textbf{[RUNBOOK]}:
+\begin{lstlisting}[language=bash]
+%%bash
+export M=../data/processed D=/content/data O=../outputs
+\end{lstlisting}
+\code{M}: manifest (trên Drive). \code{D}: gốc ảnh (ổ local). \code{O}: kết quả (trên Drive, gitignore).
+Các khối lệnh bash bên dưới đều là nội dung đặt \emph{sau} dòng \code{export} này.
+
+% ===========================================================================
+\subsection{Bảy kiểm tra bắt buộc (phiên GPU đầu tiên)}
+\label{sec:prechecks}
+
+\begin{dangerbox}
+Làm lần lượt, \textbf{trước} E1--E5. Mục nào không đạt thì \textbf{dừng và sửa}. Code GPU mới chỉ được kiểm tra cú pháp; đây là lần đầu nó chạy thật.
+Ghi kết quả từng mục (đạt/không, con số đo được) vào \code{outputs/budget.md} hoặc một issue trên GitHub.
+\end{dangerbox}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.25cm, every node/.style={font=\scriptsize}]
+\node[obox,minimum width=3.2cm] (k1) at (0,0) {\textbf{1}\\Tokenizer yes/no};
+\node[obox,minimum width=3.2cm] (k2) at (3.7,0) {\textbf{2}\\build\_example};
+\node[obox,minimum width=3.2cm] (k3) at (7.4,0) {\textbf{3}\\Loss pilot 160 mẫu};
+\node[obox,minimum width=3.2cm] (k4) at (11.1,0) {\textbf{4}\\Loại GPU};
+\node[obox,minimum width=3.2cm] (k5) at (0,-1.7) {\textbf{5}\\Smoke YOLO};
+\node[obox,minimum width=3.2cm] (k6) at (3.7,-1.7) {\textbf{6}\\Tốc độ mặt nạ phổi};
+\node[obox,minimum width=3.2cm] (k7) at (7.4,-1.7) {\textbf{7}\\Tốc độ VLM};
+\node[gbox,minimum width=3.2cm] (go) at (11.1,-1.7) {E1--E5};
+\draw[arr] (k1)--(k2); \draw[arr] (k2)--(k3); \draw[arr] (k3)--(k4);
+\draw[arr] (k4.south) -- ++(0,-0.3) -| (k5.north);
+\draw[arr] (k5)--(k6); \draw[arr] (k6)--(k7); \draw[arr] (k7)--(go);
+\end{tikzpicture}
+\caption{Bảy kiểm tra trước khi chạy đủ. Gợi ý: làm mục 4 đầu tiên, vì nếu GPU sai thì mọi mục khác đều vô nghĩa.}
+\label{fig:prechecks}
+\end{figure}
+
+\subsubsection*{Mục 1 -- Tokenizer cho điểm yes/no}
+\textbf{[RUNBOOK]} Chạy cho \code{medgemma}, rồi lặp lại cho \code{qwen}:
+\begin{lstlisting}[language=Python]
+from nodulecxr.vlm.hf import load_base
+from nodulecxr.vlm.chat import build_chat_text
+from nodulecxr.prompts import QUESTION_LOC, ANSWER_PREFIX, build_target
+_, processor = load_base("medgemma")   # repeat with "qwen"
+tok = processor.tokenizer
+base = build_chat_text(processor, QUESTION_LOC) + ANSWER_PREFIX
+for w in ("yes", "no"):
+    print(w, tok.convert_ids_to_tokens(tok(base + w, add_special_tokens=False)["input_ids"])[-8:])
+tgt = build_chat_text(processor, QUESTION_LOC, build_target(1, [[1, 2, 3, 4]]))
+print("target", tok.convert_ids_to_tokens(tok(tgt, add_special_tokens=False)["input_ids"]))
+\end{lstlisting}
+\textbf{Đạt khi}: (a) sau điểm phân kỳ giữa \code{yes} và \code{no}, token chỉ là chính từ trả lời, không gộp dấu nháy (\code{"yes} hay \code{yes"} là \textbf{sai});
+(b) trong target huấn luyện, ngay sau \code{ANSWER\_PREFIX} là đúng token \code{yes}.
+\textbf{Vì sao}: nếu dấu nháy bị gộp vào token, điểm $P(\text{yes})$ so sai hai chuỗi và mọi AUC đều sai.
+
+\subsubsection*{Mục 2 -- Một lần \texttt{build\_example} trên ảnh thật}
+\textbf{[RUNBOOK]} (dùng tiếp \code{processor}, \code{QUESTION\_LOC}, \code{build\_target} từ mục 1):
+\begin{lstlisting}[language=Python]
+from nodulecxr.records import read_manifest
+from nodulecxr.images import load_image
+from nodulecxr.train.sft_data import build_example
+df = read_manifest("../data/processed/manifest_vinbig.csv"); r = df[df.label == 1].iloc[0]
+ex = build_example(processor, load_image("/content/data", r.path), QUESTION_LOC, build_target(1, [[1, 2, 3, 4]]))
+print({k: v.shape for k, v in ex.items()})
+\end{lstlisting}
+\textbf{Đạt khi}: in ra các shape, không có \code{ValueError: chat template: prompt is not a prefix of prompt+answer}.
+Làm cho cả hai model.
+
+\subsubsection*{Mục 3 -- Loss đầu tiên của pilot 160 mẫu}
+RUNBOOK: thêm \code{--max-train 160 --epochs 1} vào một lệnh \code{train\_lora.py} của E3. Ví dụ \textbf{[DỰNG TỪ ARGPARSE]}
+(thư mục \code{--out} tùy bạn, miễn không trùng \code{C1/C2/C3}):
+\begin{lstlisting}[language=bash]
+python scripts/train_lora.py --model medgemma --mode loc --manifest $M/manifest_vinbig.csv --data-root $D --seed 0 --max-train 160 --epochs 1 --out $O/lora/pilot
+\end{lstlisting}
+160 mẫu, grad-accum 8 $\rightarrow$ 20 bước tối ưu; \code{loss} được ghi ở bước 10 và 20 (\code{logging\_steps=10}).
+\textbf{Đạt khi}: \code{loss} dòng đầu khoảng \textbf{0,5--3}. Nếu khoảng \textbf{10--25}: gradient accumulation bị chia hai lần --- dừng và sửa.
+Đọc thêm \code{train\_loss} cuối và \code{timing.json} (giây huấn luyện) để ước tính thời gian một lượt đầy đủ.
+
+\subsubsection*{Mục 4 -- Loại GPU}
+\textbf{[RUNBOOK]}
+\begin{lstlisting}[language=Python]
+import torch; print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())
+\end{lstlisting}
+\textbf{Đạt khi}: L4 hoặc A100, số đầu của capability $\ge 8$. Đừng tin \code{torch.cuda.is\_bf16\_supported()}: T4 (7.5) cũng trả \code{True} nhờ giả lập.
+
+\subsubsection*{Mục 5 -- Smoke YOLO 1 epoch}
+\textbf{[RUNBOOK]} Cách 1 (\code{<work>} là thư mục đã có \code{yolo\_data\_seed0/data.yaml}, ví dụ do cách 2 tạo):
+\begin{lstlisting}[language=Python]
+from ultralytics import YOLO
+m = YOLO("yolov8s.pt"); m.train(data="<work>/yolo_data_seed0/data.yaml", imgsz=896, epochs=1, project="/content/yolo_smoke", name="s", exist_ok=True)
+print(m.trainer.best)   # file must exist
+\end{lstlisting}
+\textbf{[RUNBOOK]} Cách 2, dùng đủ cờ bắt buộc của \code{train\_yolo.py}:
+\begin{lstlisting}[language=bash]
+%%bash
+export M=../data/processed D=/content/data O=../outputs
+python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --epochs 1 --work /content/yolo_smoke --out /content/smoke.jsonl
+ls /content/yolo_smoke/seed0/weights/best.pt
+\end{lstlisting}
+Cách 2 sau khi train còn dự đoán toàn bộ val, test, test\_nih, test\_jsrt nên chậm; có thể dừng ô khi \code{best.pt} đã xuất hiện.
+
+\subsubsection*{Mục 6 -- Thời gian mặt nạ phổi}
+\textbf{[RUNBOOK]} (PSPNet của torchxrayvision chạy trên CPU; nhãn in đã đổi sang ASCII):
+\begin{lstlisting}[language=Python]
+import sys, time; sys.path.insert(0, "scripts")
+from run_audit import lung_mask_xrv
+from nodulecxr.records import read_manifest
+from nodulecxr.images import load_image
+df = read_manifest("../data/processed/manifest_jsrt.csv").head(10)
+lung_mask_xrv(load_image("/content/data", df.iloc[0].path))   # warm-up, not timed
+t = time.time()
+for r in df.itertuples(): lung_mask_xrv(load_image("/content/data", r.path))
+print((time.time() - t) / len(df), "s/img")
+\end{lstlisting}
+Nếu quá chậm: dùng \code{--lung-mask heuristic} ở E5 và ghi quyết định vào \code{\$O/budget.md}.
+
+\subsubsection*{Mục 7 -- Thời gian suy luận mỗi ảnh của VLM}
+\textbf{[RUNBOOK]} 50 ảnh val mỗi model, config \code{pilot}, ghi ra ngoài \code{\$O/preds/}:
+\begin{lstlisting}[language=bash]
+for m in medgemma qwen; do
+  python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv --splits val --limit 50 --data-root $D --config pilot --max-new-tokens 256 --out /content/pilot_$m.jsonl
+done
+\end{lstlisting}
+Đọc \code{s/it} ở thanh tqdm (mỗi \code{it} = một ảnh, gồm cả tính điểm và sinh văn bản). Ghi vào \code{\$O/budget.md}.
+Chi phí C0 $\approx$ giây/ảnh $\times$ số ảnh của \code{val test test\_nih test\_jsrt} $\times$ 3 run $\times$ 2 model.
+Nhân tiện, mở \code{/content/pilot\_medgemma.jsonl} xem \code{raw\_text} và \code{parse\_ok}: MedGemma có xuất JSON và box không? (spec ``Việc phải làm đầu tiên'' mục 3).
+
+% ===========================================================================
+\subsection{Chạy các thí nghiệm}
+\label{sec:exp-run}
+
+\subsubsection{E0 -- Dữ liệu}
+Sau 3 script \code{prepare\_*} (§\ref{sec:prepare}), \textbf{[RUNBOOK]}:
+\begin{lstlisting}[language=bash]
+for d in vinbig nih jsrt; do python scripts/draw_boxes.py --manifest $M/manifest_$d.csv --data-root $M --out $O/qa/$d -n 8; done
+python scripts/data_stats.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --out $O/e0_data.md
+\end{lstlisting}
+\textbf{Kiểm tra}: mở \code{outputs/qa/\{vinbig,nih,jsrt\}/} bằng mắt; box đỏ phải nằm đúng trên nốt. Đọc \code{outputs/e0\_data.md}.
+\textbf{Đầu ra}: \code{\$O/e0\_data.md}, \code{\$O/e0\_data\_edges.json} (ngưỡng tertile, dùng ở báo cáo và E5).
+
+\subsubsection{E1 -- Baseline CNN (3 seed mỗi loại)}
+\textbf{[RUNBOOK]}
+\begin{lstlisting}[language=bash]
+for s in 0 1 2; do
+  python scripts/train_densenet.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --seed $s --out $O/preds/B1.jsonl
+  python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --seed $s --work /content/yolo --out $O/preds/B2.jsonl
+  mkdir -p $O/yolo/seed$s/weights && cp /content/yolo/seed$s/weights/best.pt $O/yolo/seed$s/weights/best.pt
+done
+\end{lstlisting}
+\textbf{Kiểm tra}: log DenseNet in \code{epoch k val AUC ...} mỗi epoch; \code{B1.jsonl}, \code{B2.jsonl} có dòng cho mọi ảnh không thuộc train;
+\code{\$O/yolo/seed\{0,1,2\}/weights/best.pt} tồn tại trên Drive. Dòng \code{cp} bắt buộc: \code{/content} mất khi hết phiên, và E5 cần \code{best.pt}.
+
+\subsubsection{E2 -- Zero-shot C0}
+\textbf{[RUNBOOK]}
+\begin{lstlisting}[language=bash]
+for m in medgemma qwen; do
+  python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C0-$m --run 0 --temperature 0 --max-new-tokens 256 --out $O/preds/C0-$m.jsonl
+  for r in 1 2; do
+    python scripts/predict_vlm.py --model $m --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C0-$m --run $r --temperature 0.7 --max-new-tokens 256 --out $O/preds/C0-$m.jsonl
+  done
+done
+\end{lstlisting}
+Script tự bỏ qua ảnh đã có trong file (cùng \code{config, seed, run}); Colab ngắt thì chạy lại \emph{đúng lệnh cũ}.
+Bảng chính chỉ dùng run 0 (nhiệt độ 0); run 1--2 dùng cho \code{run\_agreement.csv}.
+
+\subsubsection{E3 -- LoRA MedGemma C1--C3 (3 seed)}
+Trước tiên: pilot ở kiểm tra mục 3. Sau đó \textbf{[RUNBOOK]} huấn luyện:
+\begin{lstlisting}[language=bash]
+for s in 0 1 2; do
+  python scripts/train_lora.py --model medgemma --mode cls --manifest $M/manifest_vinbig.csv --data-root $D --seed $s --out $O/lora/C1-s$s
+  python scripts/train_lora.py --model medgemma --mode loc --manifest $M/manifest_vinbig.csv --data-root $D --seed $s --out $O/lora/C2-s$s
+  python scripts/train_lora.py --model medgemma --mode loc --balance --pos-weight 2.0 --manifest $M/manifest_vinbig.csv --data-root $D --seed $s --out $O/lora/C3-s$s
+done
+\end{lstlisting}
+
+Dự đoán. \textbf{[RUNBOOK]} ví dụ cho C3:
+\begin{lstlisting}[language=bash]
+for s in 0 1 2; do
+  python scripts/predict_vlm.py --model medgemma --adapter $O/lora/C3-s$s/final --prompt loc --generate all --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C3 --seed $s --out $O/preds/C3.jsonl
+done
+\end{lstlisting}
+C1 và C2 \textbf{[DỰNG TỪ ARGPARSE]} theo quy tắc RUNBOOK (C1: \code{--prompt cls --generate all --max-new-tokens 16}; C2: \code{--prompt loc --generate all}):
+\begin{lstlisting}[language=bash]
+for s in 0 1 2; do
+  python scripts/predict_vlm.py --model medgemma --adapter $O/lora/C1-s$s/final --prompt cls --generate all --max-new-tokens 16 --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C1 --seed $s --out $O/preds/C1.jsonl
+  python scripts/predict_vlm.py --model medgemma --adapter $O/lora/C2-s$s/final --prompt loc --generate all --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C2 --seed $s --out $O/preds/C2.jsonl
+done
+\end{lstlisting}
+Với C1, \code{--generate none} chỉ cho điểm và để trống các cột \code{raw\_sens}, \code{no\_on\_pos}, \code{yes\_on\_neg}, \code{unparsed}; vì vậy nên dùng \code{--generate all}.
+
+\textbf{Đường học} (RUNBOOK): chạy \code{predict\_vlm.py --splits val --generate none} cho từng \code{checkpoint-*} của seed 0, với
+\code{--config <cfg>-ep<k>} và cùng \code{--prompt} của cấu hình nguồn.
+
+\begin{warnbox}
+Nếu ghi các dự đoán đường học vào \code{\$O/preds/}, \code{make\_report.py} sẽ đưa các dòng \code{C3-ep1}, \code{C3-ep2}\ldots{} vào \code{val\_selection.csv}
+(chúng chỉ có split val nên không vào bảng test). Khi chọn cấu hình tốt nhất cho E4/E5, \textbf{chỉ so C1, C2, C3}; bỏ qua các dòng \code{-ep}.
+\end{warnbox}
+
+\subsubsection{Báo cáo trung gian (cổng chọn cấu hình)}
+\textbf{[RUNBOOK]}
+\begin{lstlisting}[language=bash]
+python scripts/make_report.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --preds "$O/preds/*.jsonl" --edges-json $O/e0_data_edges.json --out $O/report
+\end{lstlisting}
+Mở \code{\$O/report/val\_selection.csv}. Tính trung bình \code{val\_sens90} qua seed cho C1, C2, C3. Cấu hình cao nhất là ``LoRA tốt nhất''.
+\code{val\_auc} chỉ để tham khảo. Ghi lựa chọn và con số vào \code{docs/decisions.md}.
+
+\textbf{[GỢI Ý]} đọc nhanh bằng pandas:
+\begin{lstlisting}[language=Python]
+import pandas as pd
+v = pd.read_csv("../outputs/report/val_selection.csv")
+print(v[v.config.isin(["C1", "C2", "C3"])].groupby("config").val_sens90.agg(["mean", "std", "count"]))
+\end{lstlisting}
+
+\subsubsection{E4 -- C4 trên Qwen2.5-VL-3B (1--3 seed)}
+RUNBOOK: chạy lại \code{train\_lora.py --model qwen} với \emph{đúng các cờ} của cấu hình tốt nhất, rồi dự đoán với \code{--model qwen --config C4}
+và đúng \code{--prompt}/\code{--generate} (cùng \code{--max-new-tokens}) của cấu hình nguồn.
+Ví dụ \textbf{[DỰNG TỪ ARGPARSE]} nếu cấu hình tốt nhất là C3, seed 0:
+\begin{lstlisting}[language=bash]
+python scripts/train_lora.py --model qwen --mode loc --balance --pos-weight 2.0 --manifest $M/manifest_vinbig.csv --data-root $D --seed 0 --out $O/lora/C4-s0
+python scripts/predict_vlm.py --model qwen --adapter $O/lora/C4-s0/final --prompt loc --generate all --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --splits val test test_nih test_jsrt --data-root $D --config C4 --seed 0 --out $O/preds/C4.jsonl
+\end{lstlisting}
+Nếu tốt nhất là C1: thay \code{--mode loc --balance --pos-weight 2.0} bằng \code{--mode cls}, và dự đoán với \code{--prompt cls --generate all --max-new-tokens 16}.
+
+\subsubsection{E5 -- Kiểm toán che vùng}
+Cấu hình: C0-medgemma, LoRA tốt nhất (adapter seed 0), B2 (seed 0). Hai tập:
+\begin{itemize}
+\item \code{test}, dùng \code{manifest\_vinbig.csv};
+\item \code{test\_jsrt}, dùng \code{manifest\_jsrt.csv}.
+\end{itemize}
+Ngưỡng lấy từ \code{\$O/report/thresholds.json}, khóa \code{config|seed|run}. \textbf{[GỢI Ý]} đọc ngưỡng:
+\begin{lstlisting}[language=bash]
+python -c "import json; t=json.load(open('../outputs/report/thresholds.json')); print(t['C3|0|0']['t90'], t['C0-medgemma|0|0']['t90'], t['B2|0|0']['t90'])"
+\end{lstlisting}
+\textbf{[RUNBOOK]} (ví dụ LoRA tốt nhất là C3; thay \code{<t90...>} bằng số vừa đọc):
+\begin{lstlisting}[language=bash]
+# best LoRA (example: C3, seed 0; if C1, add --prompt cls)
+python scripts/run_audit.py --scorer vlm --model medgemma --adapter $O/lora/C3-s0/final --manifest $M/manifest_jsrt.csv --split test_jsrt --data-root $D --threshold <t90> --edges-json $O/e0_data_edges.json --out $O/audit/C3_jsrt.json
+# C0 zero-shot (no --adapter)
+python scripts/run_audit.py --scorer vlm --model medgemma --manifest $M/manifest_jsrt.csv --split test_jsrt --data-root $D --threshold <t90 of C0-medgemma|0|0> --edges-json $O/e0_data_edges.json --out $O/audit/C0_jsrt.json
+# B2 YOLO
+python scripts/run_audit.py --scorer yolo --yolo-weights $O/yolo/seed0/weights/best.pt --manifest $M/manifest_jsrt.csv --split test_jsrt --data-root $D --threshold <t90 of B2|0|0> --edges-json $O/e0_data_edges.json --out $O/audit/B2_jsrt.json
+\end{lstlisting}
+Lặp lại cho VinBigData test: đổi thành \code{--manifest \$M/manifest\_vinbig.csv} và \code{--split test}, đổi tên \code{--out} (ví dụ \code{C3\_test.json}).
+Thêm \code{--lung-mask heuristic} nếu mặt nạ PSPNet quá chậm (mục 6).
+
+\textbf{Đọc kết quả}: file \code{.json} có \code{n}, \code{n\_orig\_yes}, \code{n\_t2\_ok}, \code{flip\_t1\_all}, \code{flip\_t1}, \code{flip\_t2}, \code{delta}, \code{yes\_rate\_t3},
+cùng \code{by\_size} và (JSRT) \code{by\_subtlety}. \textbf{Số cần báo cáo là \code{delta}}, kèm \code{n\_t2\_ok}. File \code{.csv} cùng tên chứa điểm từng ảnh.
+
+\subsubsection{Báo cáo cuối}
+Chạy lại \code{make\_report.py} (cùng lệnh ở trên) sau khi có C4. Thư mục \code{\$O/report/} khi đó có đủ 8 file.
+
+% ===========================================================================
+\subsection{Ngân sách và cắt giảm}
+\label{sec:budget}
+
+Spec §7: lượt LoRA đầu tiên dùng để đo thời gian. \textbf{Nếu một lượt vượt 3 giờ}, cắt theo đúng thứ tự (RUNBOOK):
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.35cm, every node/.style={font=\scriptsize}]
+\node[obox,minimum width=3.0cm] (a) {1. \code{--neg-per-pos} 4 $\rightarrow$ 2\\(giữ mọi ảnh dương)};
+\node[obox,right=of a,minimum width=3.2cm] (b) {2. Giảm độ phân giải\\chỉ Qwen: \code{min\_pixels}/\code{max\_pixels}\\trong \code{vlm/hf.py}};
+\node[obox,right=of b,minimum width=2.4cm] (c) {3. \code{--epochs 2}};
+\node[obox,right=of c,minimum width=2.4cm] (d) {4. C1 chỉ 1 seed};
+\draw[arr] (a)--(b); \draw[arr] (b)--(c); \draw[arr] (c)--(d);
+\end{tikzpicture}
+\caption{Thứ tự cắt giảm. Bước 2 không áp dụng cho MedGemma (processor cố định 896 px) và không có cờ dòng lệnh.}
+\label{fig:budget}
+\end{figure}
+
+Ghi \emph{mọi} quyết định vào \code{outputs/budget.md}: ngày, đo được bao nhiêu, cắt bước nào, áp cho cấu hình nào.
+\code{outputs/} không vào git, nên tóm tắt các quyết định cắt giảm cũng phải chép sang \code{docs/decisions.md}.
+
+% ===========================================================================
+\subsection{Lỗi thường gặp}
+\label{sec:errors}
+
+\begin{center}
+\small
+\begin{longtable}{@{}P{5.0cm}P{9.6cm}@{}}
+\toprule
+\textbf{Triệu chứng} & \textbf{Nguyên nhân và cách sửa} \\
+\midrule\endhead
+\code{RuntimeError: MedGemma needs a bf16-capable GPU (L4/A100)} & Đang ở T4 hoặc CPU. Đổi runtime sang L4/A100. Kiểm tra lại bằng mục 4. \\
+\code{401}/\code{403}, \code{GatedRepoError}, ``access to model is restricted'' & Chưa được cấp quyền MedGemma, hoặc token sai/thiếu. Kiểm tra: đã chấp nhận HAI-DEF trên đúng tài khoản; secret tên đúng \code{HF\_TOKEN}; đã bật \emph{Notebook access}; đã chạy ô §0. \\
+\code{SecretNotFoundError} khi \code{userdata.get} & Chưa tạo secret, hoặc gõ sai tên. \\
+Colab ngắt kết nối giữa chừng & \code{predict\_vlm.py}: chạy lại đúng lệnh, nó chạy tiếp từ ảnh chưa làm. \code{train\_lora.py}, \code{train\_densenet.py}, \code{train\_yolo.py}: \textbf{không} tự chạy tiếp; chạy lại sẽ huấn luyện từ đầu. B1/B2 sẽ ghi thêm dòng trùng vào JSONL; \code{make\_report.py} giữ dòng cuối nên vẫn đúng. Nếu một dòng JSONL cuối bị cắt dở, xóa dòng đó. \\
+\code{CUDA out of memory} & Batch đã là 1 và đã bật gradient checkpointing. Thử: khởi động lại runtime (giải phóng model đã tải ở các ô kiểm tra), dùng A100 thay L4. Với Qwen có thể giảm \code{max\_pixels} trong \code{vlm/hf.py} (bước 2 của quy tắc ngân sách). Ghi mọi thay đổi vào \code{budget.md}. \\
+\code{loss} ban đầu khoảng 10--25 & Gradient accumulation bị chia hai lần (mục 3). Dừng, không chạy E3; báo lại trong issue. \\
+\code{ValueError: chat template: prompt is not a prefix\ldots} & Chat template của model/phiên bản transformers khác giả định. Dừng; ghi phiên bản \code{transformers}; không tự ý bỏ kiểm tra. \\
+\code{KeyError} trong \code{prepare\_nih.py} & Thiếu ảnh NIH: phải tải đủ các gói ảnh. \\
+\code{StopIteration} trong \code{prepare\_jsrt.py} & Thiếu file \code{.IMG} của một ảnh có trong file TXT. \\
+\code{FileNotFoundError: ...CLNDAT\_EN.txt} & Sai tên hoặc vị trí file thông tin JSRT; phải nằm ngay trong \code{--raw-dir}. \\
+Box vẽ ở E0 bị lệch & Kích thước gốc sai (\code{--meta-csv}, \code{--h-col}, \code{--w-col}). Sửa rồi xóa \code{data/processed/vinbig/} và chạy lại (script bỏ qua PNG đã có). \\
+Chạy rất chậm khi đọc ảnh & Đang đọc từ Drive. Dùng \code{--data-root \$D} (\code{/content/data}) sau lệnh \code{rsync} ở §0. \\
+\code{t90} là \code{Infinity} & Mô hình cho điểm gần như bằng nhau trên mọi ảnh val (chế độ báo bình thường cực đoan). Không sửa; báo cáo trung thực, sensitivity sẽ là 0. \\
+Mất \code{best.pt} của YOLO & Quên dòng \code{cp} ở E1. Phải huấn luyện lại seed đó. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+% ===========================================================================
+\subsection{Điền báo cáo từ kết quả}
+\label{sec:fill-report}
+
+Báo cáo nằm ở \code{report/}. Các ô \textcolor{badred}{[--]} màu đỏ chờ số. Biên dịch: \code{latexmk -xelatex main.tex} trong \code{report/}.
+
+\begin{center}
+\small
+\begin{longtable}{@{}P{4.2cm}P{4.8cm}P{5.6cm}@{}}
+\caption{Ánh xạ file kết quả $\rightarrow$ vị trí trong báo cáo.}\label{tab:fillmap}\\
+\toprule
+\textbf{Vị trí trong báo cáo} & \textbf{File nguồn} & \textbf{Cột / khóa} \\
+\midrule\endfirsthead
+\toprule
+\textbf{Vị trí trong báo cáo} & \textbf{File nguồn} & \textbf{Cột / khóa} \\
+\midrule\endhead
+Bảng \code{tab:data-stats} (\code{04a\_du\_lieu.tex}) & \code{outputs/e0\_data.md} & \code{n}, \code{n\_pos}, \code{prevalence} theo split; tầng kích thước \\
+Bảng \code{tab:main} (\code{04b\_ket\_qua.tex}) & \code{outputs/report/summary.csv} & \code{sens\_mean} $\pm$ \code{sens\_sd} (sens ở $t_{90}$), \code{auc\_roc\_mean}; theo \code{split} = \code{test}, \code{test\_nih}, \code{test\_jsrt} \\
+CI 95\% kèm bảng chính & \code{summary\_per\_seed.csv} & \code{sens\_lo}, \code{sens\_hi}, \code{auc\_roc\_lo}, \code{auc\_roc\_hi} (theo seed) \\
+Bảng \code{tab:loc} & \code{summary.csv} & \code{mean\_best\_iou\_mean}, \code{hit\_iou30\_mean}, \code{hit\_iou50\_mean} (\code{test}); \code{jsrt\_median\_dist\_mm\_mean} (\code{test\_jsrt}). Trừ \code{hit\_iou30}, các cột này không có trong \code{summary.md}. \\
+Mục ``Chế độ báo bình thường'' & \code{summary.csv} & \code{no\_on\_pos}, \code{yes\_on\_neg}, \code{unparsed}, \code{raw\_sens}, \code{ece}, \code{balanced\_brier}; đường học từ dự đoán \code{-ep<k>} \\
+Độ ổn định C0 (E2) & \code{run\_agreement.csv} & \code{agreement}, \code{n\_images} \\
+Bảng \code{tab:audit-res} & \code{outputs/audit/*.json} & \code{flip\_t1}, \code{flip\_t2}, \code{delta} (\code{n\_t2\_ok}); cột T3 ``ảnh âm $\rightarrow$ no'' $= 1 -$ \code{yes\_rate\_t3} \\
+Biểu đồ sens theo tầng & \code{strata.csv}; \code{audit/*.json} & \code{kind} (\code{size}/\code{subtlety}), \code{stratum}, \code{sensitivity}, \code{count}; \code{by\_size}, \code{by\_subtlety} \\
+p-value so sánh cặp & \code{comparisons.csv} & \code{p\_sens\_holm}, \code{p\_spec\_holm}, \code{p\_auc\_holm} (seed 0, run 0) \\
+Chọn cấu hình (phương pháp) & \code{val\_selection.csv} & \code{val\_sens90} trung bình qua seed \\
+FROC, AUC-PR, PPV & \code{summary.csv} & \code{froc\_0.5fp\_mean}, \code{froc\_1fp\_mean}, \code{auc\_pr\_mean}, \code{ppv\_prev\_1pct\_mean} \\
+Tóm tắt, Kết luận (\code{00\_tom\_tat.tex}, \code{05\_ket\_luan.tex}) & tổng hợp các bảng trên & trả lời Q1, Q2 \\
+Trang bìa, lời cảm ơn (\code{main.tex}, \code{00\_front.tex}) & --- & điền tên GVHD vào \code{[ĐIỀN TÊN GVHD]} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\begin{keybox}
+\textbf{Cách điền.} Mỗi lần điền số, ghi rõ trong commit: số lấy từ file nào, chạy ngày nào (ví dụ \code{docs: fill tab:main from outputs/report/summary.csv (2026-12-01)}).
+Báo cáo số làm tròn 3 chữ số thập phân, dùng dấu phẩy thập phân theo văn phong tiếng Việt của báo cáo. Ô nào không có số (ví dụ C1 không có box) ghi ``---'' và giải thích.
+\end{keybox}
