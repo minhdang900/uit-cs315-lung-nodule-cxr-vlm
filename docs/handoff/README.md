@@ -37,7 +37,6 @@ Thứ tự ưu tiên khi các tài liệu khác nhau: **spec > RUNBOOK > sổ ta
 5. Colab Pro với GPU **L4 hoặc A100**. **Không dùng T4** (MedGemma cần bf16 thật; code sẽ báo `RuntimeError`).
 6. Đọc điều khoản và tải dữ liệu (xem mục 5). Dữ liệu chỉ dùng cho nghiên cứu, **không phân phối lại**.
 7. Chạy E0 → 7 kiểm tra bắt buộc → E1–E3 → `make_report.py` → chọn cấu hình trên val → E4, E5 → điền báo cáo.
-8. Điền tên GVHD ở trang bìa báo cáo (`[ĐIỀN TÊN GVHD]` trong `report/main.tex` và `report/chapters/00_front.tex`).
 
 ## 3. Kiến trúc
 
