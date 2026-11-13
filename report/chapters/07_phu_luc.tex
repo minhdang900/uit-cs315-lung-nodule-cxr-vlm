@@ -1,0 +1,188 @@
+% ============================================================================
+%  PHỤ LỤC
+% ============================================================================
+\clearpage
+\appendix
+\section*{Phụ lục}
+\addcontentsline{toc}{section}{Phụ lục}
+\renewcommand{\thesubsection}{\Alph{subsection}}
+
+\subsection{Quy trình thực nghiệm bắt buộc}
+\label{app:protocol}
+
+Phụ lục này là quy trình nhóm thực hiện phải theo khi chạy E0--E5. Lệnh chính xác, đủ cờ, nằm trong
+\code{code/RUNBOOK.md}; khi phụ lục và RUNBOOK khác nhau về lệnh, theo RUNBOOK. Khi khác nhau về phương pháp, theo
+đề cương (\code{docs/design/2026-11-12-lung-nodule-cxr-vlm-lora-design.md}, mục 8.5). Năm quy tắc:
+\begin{enumerate}
+  \item Chạy theo đúng thứ tự ở Hình~\ref{fig:workflow}. Không chạy E1--E5 khi còn mục kiểm tra trước chưa đạt.
+  \item Chỉ chọn ngưỡng và cấu hình trên validation, tức là từ hai file \code{thresholds.json} và
+        \code{val\_selection.csv}. Không mở cột test để chọn, kể cả khi số trên test ``đẹp'' hơn.
+  \item Không gõ tay số vào báo cáo. Mọi ô \textcolor{badred}{[--]} chép từ file trong \code{outputs/} như
+        Bảng~\ref{tab:protocol}.
+  \item Không xoá hay sửa tay file \code{outputs/preds/*.jsonl}. Script tự bỏ qua ảnh đã chạy, nên khi Colab ngắt
+        chỉ cần chạy lại đúng lệnh cũ.
+  \item Ghi mọi quyết định ngân sách (cắt ảnh âm, giảm epoch, mặt nạ phổi heuristic, \dots) vào
+        \code{outputs/budget.md}, và nêu lại trong báo cáo.
+\end{enumerate}
+
+\paragraph{Kiểm tra bắt buộc trên Colab trước khi chạy đủ.} Làm lần lượt; mục nào không đạt thì dừng và sửa
+(chi tiết trong mục ``Kiểm tra bắt buộc'' của \code{RUNBOOK.md}).
+\begin{itemize}[label=$\square$]
+  \item \textbf{1. Tokenizer cho điểm yes/no} (với \code{medgemma} và \code{qwen}): sau điểm phân kỳ chỉ còn chính
+        từ \code{yes}/\code{no}, không có dấu nháy bị gộp; target huấn luyện sau \code{ANSWER\_PREFIX} bắt đầu bằng
+        đúng token đó.
+  \item \textbf{2. Một lần \code{build\_example} cho mỗi model trên ảnh thật:} không ném \code{ValueError} ở bước
+        kiểm tra tiền tố prompt của Gemma.
+  \item \textbf{3. Loss đầu tiên của pilot 160 mẫu} (\code{--max-train 160 --epochs 1}): \code{loss} ở bước 10
+        khoảng 0,5--3. Nếu khoảng 10--25 thì gradient accumulation bị chia hai lần: dừng và sửa.
+  \item \textbf{4. Loại GPU:} L4 hoặc A100, số đầu của \code{torch.cuda.get\_device\_capability()} $\ge 8$. Không
+        dựa vào \code{is\_bf16\_supported()} (T4 cũng trả \code{True}).
+  \item \textbf{5. Smoke YOLO 1 epoch:} file \code{best.pt} được tạo ra.
+  \item \textbf{6. Thời gian mặt nạ phổi} của \code{run\_audit.py} trên 10 ảnh; nếu quá chậm dùng
+        \code{--lung-mask heuristic} và ghi vào \code{budget.md}.
+  \item \textbf{7. Thời gian suy luận VLM} trên 50 ảnh val (cấu hình \code{pilot}, ghi ra ngoài \code{outputs/preds/});
+        ghi giây/ảnh vào \code{budget.md} và ngoại suy chi phí C0.
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{Đầu vào, lệnh, đầu ra của từng bước và chỗ trong báo cáo mà bước đó điền. Đường dẫn tương đối với thư
+mục gốc dự án; \code{M = data/processed}, \code{O = outputs}.}
+\label{tab:protocol}
+\scriptsize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{1.05cm} >{\raggedright\arraybackslash}p{2.75cm}
+  >{\raggedright\arraybackslash}p{3.15cm} >{\raggedright\arraybackslash}p{3.6cm} L@{}}
+\toprule
+\textbf{Bước} & \textbf{Đầu vào} & \textbf{Lệnh (RUNBOOK)} & \textbf{Đầu ra} & \textbf{Điền vào} \\
+\midrule
+Kiểm tra & Colab L4/A100, \code{HF\_TOKEN}, \code{M/} & 7 mục ở trên & \code{O/budget.md} & Ngân sách (Mục~\ref{sec:method}) \\
+\addlinespace
+E0 & Dữ liệu gốc VinBigData, NIH, JSRT & \code{prepare\_vinbig.py}, \code{prepare\_nih.py}, \code{prepare\_jsrt.py}, \code{draw\_boxes.py}, \code{data\_stats.py}
+   & \code{M/manifest\_*.csv}, PNG 896, \code{O/qa/}, \code{O/e0\_data.md}, \code{O/e0\_data\_edges.json}
+   & Bảng~\ref{tab:data-stats}; số ca ở Hình~\ref{fig:split} \\
+\addlinespace
+E1 & 3 manifest, PNG & \code{train\_densenet.py}, \code{train\_yolo.py}, seed 0--2
+   & \code{O/preds/B1.jsonl}, \code{B2.jsonl}, \code{O/yolo/seed*/}\allowbreak\code{weights/best.pt}
+   & Dòng B1, B2 của Bảng~\ref{tab:main}; B2 ở Bảng~\ref{tab:loc} \\
+\addlinespace
+E2 & 3 manifest & \code{predict\_vlm.py --config C0-medgemma|C0-qwen}, run 0 ($T{=}0$), run 1--2 ($T{=}0{,}7$), 256 token
+   & \code{O/preds/C0-medgemma.jsonl}, \code{C0-qwen.jsonl}
+   & Dòng C0 của Bảng~\ref{tab:main}, \ref{tab:loc}; \code{run\_agreement.csv} \\
+\addlinespace
+E3 & \code{manifest\_vinbig.csv} & \code{train\_lora.py --mode cls|loc} (C3: \code{--balance --pos-weight 2.0}), seed 0--2;
+   \code{predict\_vlm.py --adapter}
+   & \code{O/lora/C\{1,2,3\}-s*/final}, \code{timing.json}, \code{O/preds/C1|C2|C3.jsonl}, \code{<cfg>-ep<k>}
+   & Dòng C1--C3 của Bảng~\ref{tab:main}, \ref{tab:loc}; mục chế độ báo bình thường \\
+\addlinespace
+Báo cáo lần 1 & \code{O/preds/*.jsonl}, \code{e0\_data\_edges.json} & \code{make\_report.py}
+   & \code{O/report/}\allowbreak\code{val\_selection.csv}, \code{thresholds.json}, \code{summary.csv/.md}, \code{summary\_per\_seed.csv},
+     \code{strata.csv}, \code{comparisons.csv}, \code{run\_agreement.csv}
+   & Chọn cấu hình LoRA tốt nhất (trung bình \code{val\_sens90}); ghi vào \code{budget.md} \\
+\addlinespace
+E4 & Cấu hình tốt nhất từ \code{val\_selection.csv} & \code{train\_lora.py --model qwen} cùng cờ; \code{predict\_vlm.py --model qwen --config C4}
+   & \code{O/lora/C4-s*}, \code{O/preds/C4.jsonl}
+   & Dòng C4 của Bảng~\ref{tab:main}, \ref{tab:loc} \\
+\addlinespace
+E5 & $t_{90}$ từ \code{thresholds.json} (khoá \code{cfg|0|0}), adapter seed 0, \code{best.pt} seed 0
+   & \code{run\_audit.py} trên \code{test} và \code{test\_jsrt}, cho C0-medgemma, LoRA tốt nhất, B2
+   & \code{O/audit/}\allowbreak\code{<cfg>\_<split>.json} (\code{delta}, \code{n\_t2\_ok}, \code{flip\_t1\_all}, \code{yes\_rate\_t3}, \code{by\_size}, \code{by\_subtlety})
+   & Bảng~\ref{tab:audit-res}; biểu đồ theo tầng \\
+\addlinespace
+Báo cáo cuối & Toàn bộ \code{O/preds/} & \code{make\_report.py} (chạy lại)
+   & \code{O/report/summary.md} và các file trên
+   & Mọi ô \textcolor{badred}{[--]}; Tóm tắt; Kết luận (Q1, Q2) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Lịch dự kiến.} Hình~\ref{fig:gantt} là lịch đề xuất cho phần việc còn lại. Ngày tháng chỉ là đề xuất,
+nhóm điều chỉnh theo thời gian đo được ở kiểm tra mục 3 và 7.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=0.32cm,y=1cm]
+  % trục: ngày 0 = 14/11/2026, ngày 34 = 18/12/2026
+  \foreach \d/\l in {0/14/11,7/21/11,14/28/11,21/05/12,28/12/12,34/18/12}{
+    \draw[black!15] (\d,0.35) -- (\d,-5.25);
+    \node[fnote, anchor=south] at (\d,0.35) {\l};}
+  \newcommand{\gtask}[5]{% hàng, bắt đầu, kết thúc, màu, nhãn
+    \node[font=\scriptsize, anchor=east] at (-0.4,-#1*0.55) {#5};
+    \fill[#4!35, draw=#4] (#2,-#1*0.55-0.19) rectangle (#3,-#1*0.55+0.19);}
+  \gtask{0}{0}{4}{black}{Kiểm tra trước + E0}
+  \gtask{1}{4}{10}{okgreen}{E1 baseline B1, B2}
+  \gtask{2}{5}{11}{black}{E2 zero-shot C0}
+  \gtask{3}{7}{19}{uitblue}{E3 LoRA C1--C3}
+  \gtask{4}{19}{20.5}{warnorange}{\code{make\_report} + chọn cấu hình}
+  \gtask{5}{20.5}{25}{uitblue}{E4 C4 (Qwen)}
+  \gtask{6}{20.5}{26}{badred}{E5 kiểm toán}
+  \gtask{7}{26}{27.5}{warnorange}{\code{make\_report} lần cuối}
+  \gtask{8}{14}{31}{black}{Viết báo cáo}
+  \gtask{9}{28}{33}{black}{Slide, rà soát}
+  \fill[warnorange] (20.5,-4*0.55) circle (3pt);
+  \node[fnote, anchor=west, text=warnorange] at (21.2,-4*0.55) {cổng chọn (chỉ validation)};
+\end{tikzpicture}
+\caption{Lịch \textbf{đề xuất} cho phần việc còn lại, từ 14/11 đến 18/12/2026; chưa phải lịch đã chốt. Màu theo
+loại việc như các hình trước: xanh lá baseline, xám zero-shot, xanh dương LoRA, cam bước chọn và tổng hợp, đỏ kiểm toán.}
+\label{fig:gantt}
+\end{figure}
+
+\subsection{Prompt và định dạng đầu ra}
+
+\begin{lstlisting}[escapeinside={(*}{*)}]
+(*\lstcmt{\# Câu hỏi định vị (C0, C2--C4)}*)
+Is there a lung nodule or mass on this chest X-ray? If yes, give the bounding
+box(es) in pixel coordinates. Answer in JSON.
+
+(*\lstcmt{\# Câu hỏi chỉ phân loại (C1)}*)
+Is there a lung nodule or mass on this chest X-ray? Answer in JSON.
+
+(*\lstcmt{\# Đáp án đích (C0, C2--C4); C1 chỉ có khoá nodule}*)
+{"nodule": "yes", "boxes": [[412, 230, 468, 281]]}   (*\lstcmt{\# ca dương, toạ độ trên ảnh 896$\times$896}*)
+{"nodule": "no", "boxes": []}                        (*\lstcmt{\# ca âm}*)
+\end{lstlisting}
+
+Parser chấp nhận JSON hợp lệ có khoá \code{nodule} nhận \code{yes}/\code{no}. Box không hợp lệ (toạ độ ngoài
+ảnh, $x_2 \le x_1$) bị loại. Câu trả lời không parse được tính là ``no'' khi tính sensitivity/specificity thô,
+bị loại khỏi các chỉ số chế độ báo bình thường, và tỷ lệ của chúng được báo riêng.
+
+\subsection{Siêu tham số}
+
+\begin{table}[H]
+\centering
+\caption{Siêu tham số huấn luyện.}
+\label{tab:hparams}
+\small
+\begin{tabularx}{\textwidth}{@{}p{4.2cm} L@{}}
+\toprule
+\textbf{Thành phần} & \textbf{Giá trị} \\
+\midrule
+LoRA & $r = 16$, $\alpha = 32$, dropout 0,05; attention + MLP của LLM \\
+Bộ mã hoá ảnh & đông cứng \\
+Tối ưu & AdamW, lr $10^{-4}$, cosine, warmup 3\% \\
+Epoch, batch & 3 epoch; batch 1 $\times$ tích luỹ gradient 8 \\
+Độ chính xác & bf16, gradient checkpointing \\
+Ảnh âm/ảnh dương khi huấn luyện & tối đa 4:1 \\
+C3 & oversampling 1:1 (\code{--balance}); $w_{+} = 2$ (\code{--pos-weight 2.0}), áp lên mọi token đáp án ca dương \\
+Phần cứng & GPU compute capability $\ge 8$ (L4/A100) cho MedGemma \\
+Sinh văn bản & tối đa 256 token ở C0; 96 token (mặc định) ở C2--C4, 16 token ở C1; nhiệt độ 0 (thêm 2 lần 0,7 ở E2) \\
+B1 DenseNet-121 & Adam, lr $10^{-4}$, 10 epoch, batch 32, BCE có \code{pos\_weight} \\
+B2 YOLOv8 & ảnh 896, 50 epoch, batch 16 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Mã nguồn và tái lập}
+
+Mã nguồn nằm trong gói Python \code{nodulecxr} (thư mục \code{code/}), viết theo hướng kiểm thử trước, gồm các
+module: chuẩn bị dữ liệu và hợp nhất box, prompt và parser, huấn luyện LoRA, baseline CNN, chỉ số phát hiện và
+định vị, thống kê, kiểm toán che vùng, và tổng hợp bảng. Các bước cần GPU chạy trên Colab theo \code{RUNBOOK.md}.
+Bảng kết quả trong báo cáo được sinh từ file dự đoán JSONL, không gõ tay.
+
+\subsection{Mức kiểm chứng tài liệu}
+
+Tổng quan dựa trên 90 bài (\code{docs/lit-review/lung-cancer-cxr/corpus.md}). Hai bài cốt
+lõi~\cite{khovanova2026comparative,nishio2026zeroshot} đã qua bình duyệt và được đọc toàn văn
+(\cite{nishio2026zeroshot} qua bản preprint medRxiv). Các bài preprint
+(\cite{muthyala2026frozen,choi2026chexpercept,fisher2025vlfm,mustafic2026noduloc}) chưa qua bình duyệt và được
+trích dẫn thận trọng.

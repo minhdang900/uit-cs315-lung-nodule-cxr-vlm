@@ -1,0 +1,133 @@
+% ============================================================================
+%  CHƯƠNG 4a. DỮ LIỆU
+% ============================================================================
+\clearpage
+\section{Dữ liệu}
+\label{sec:data}
+
+\subsection{Các bộ dữ liệu}
+
+\begin{table}[H]
+\centering
+\caption{Vai trò của từng bộ dữ liệu.}
+\label{tab:datasets}
+\small
+\begin{tabularx}{\textwidth}{@{}p{2.9cm} p{3.2cm} L@{}}
+\toprule
+\textbf{Vai trò} & \textbf{Bộ dữ liệu} & \textbf{Nhãn dùng và ghi chú} \\
+\midrule
+Huấn luyện, validation, test trong phân phối & VinBigData / VinDr-CXR~\cite{nguyen2022vindr} & 15.000 ảnh huấn
+luyện, box theo từng bác sĩ (3 bác sĩ/ảnh). Dương: có ít nhất một box ``Nodule/Mass''; âm: mọi ảnh còn lại, gồm
+cả ảnh ``No finding'' và ảnh có bệnh khác (âm khó). \\
+\addlinespace
+Test ngoài phân phối 1 & NIH ChestX-ray14~\cite{wang2017chestxray8} & Dương: các ảnh có box Nodule hoặc Mass
+trong \code{BBox\_List\_2017.csv} (tập con khoảng 1.000 ảnh có box cho 8 bệnh). Âm: ảnh ``No Finding'' của
+bệnh nhân không có ảnh dương, lấy ngẫu nhiên gấp 3 lần số ảnh dương (\code{--neg-ratio 3}). Nhãn ``No Finding''
+rút từ báo cáo nên có nhiễu. \\
+\addlinespace
+Test ngoài phân phối 2 (độ mờ) & JSRT~\cite{shiraishi2000jsrt} & 247 ảnh, 154 có nốt kèm vị trí, kích thước
+(mm), độ mờ 1--5, lành/ác. Cho phép so trực tiếp với~\cite{nishio2026zeroshot}. \\
+\addlinespace
+Chỉ tham khảo & NODE21~\cite{sogancioglu2024node21} & Trùng nguồn với JSRT và NIH nên không dùng làm test, để tránh rò rỉ. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Trước khi dùng, nhóm phải kiểm tra điều khoản của cuộc thi VinBigData trên Kaggle, giấy phép NIH và JSRT, và
+chấp nhận điều khoản Health AI Developer Foundations để tải MedGemma. Ảnh không được phân phối lại; đồ án chỉ bàn
+giao nhãn và dự đoán.
+
+\subsection{Gán nhãn và hợp nhất box}
+
+Mỗi ảnh VinBigData được 3 bác sĩ gán nhãn độc lập. Ảnh là dương nếu có ít nhất một box Nodule/Mass. Box của các
+bác sĩ được hợp nhất bằng WBF~\cite{solovyev2021wbf} để có một box tham chiếu cho mỗi tổn thương. Nốt và khối
+được gộp thành một lớp dương; vì khối lớn trên 3\,cm dễ phát hiện hơn nhiều, kết quả được phân tầng theo kích thước
+để tránh việc khối lớn che lấp hiệu năng trên nốt nhỏ.
+
+\subsection{Chia dữ liệu}
+
+VinBigData được chia theo \code{image\_id}, tỷ lệ 70/10/20, phân tầng theo nhãn Nodule/Mass, với seed cố định
+(\code{prepare\_vinbig.py --seed 0}). Bản VinBigData trên Kaggle không kèm mã bệnh nhân, nên không chia được theo
+bệnh nhân; nếu một bệnh nhân có nhiều ảnh, các ảnh đó có thể rơi vào cả train và test (một hạn chế, xem
+Mục~\ref{sec:conclusion}). Ngưỡng và lựa chọn cấu hình chỉ dùng validation. NIH và JSRT chỉ dùng làm test.
+Hình~\ref{fig:split} tóm tắt cách chia, vai trò của từng tập và định nghĩa ca dương.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm, fb/.append style={font=\scriptsize, minimum height=0.8cm}]
+  % ---- thanh chia VinBigData ----
+  \node[font=\footnotesize\bfseries, anchor=south west] at (0,0.8) {VinBigData / VinDr-CXR: 15.000 ảnh, $\approx$2,7\% dương};
+  \draw[fill=uitblue!25, draw=uitblue] (0,0) rectangle (6.3,0.7);
+  \draw[fill=warnorange!25, draw=warnorange] (6.3,0) rectangle (7.2,0.7);
+  \draw[fill=badred!18, draw=badred] (7.2,0) rectangle (9.0,0.7);
+  \node[font=\footnotesize] at (3.15,0.35) {train 70\%};
+  \node[font=\scriptsize] at (6.75,0.35) {val};
+  \node[font=\footnotesize] at (8.1,0.35) {test 20\%};
+  \node[fnote, anchor=north] at (3.15,-0.05) {$\approx$287 dương (ước tính)};
+  \node[fnote, anchor=north] at (6.75,-0.05) {$\approx$41};
+  \node[fnote, anchor=north] at (8.1,-0.05) {$\approx$82};
+  \node[fnote, anchor=north west] at (0,-0.45) {chia theo \code{image\_id}, phân tầng theo nhãn, seed 0};
+  % ---- định nghĩa nhãn ----
+  \node[fb, text width=5.7cm, align=left, anchor=north west] (def) at (9.5,1.3) {%
+    \textbf{Định nghĩa nhãn (mức ảnh)}\\[1pt]
+    \textcolor{badred}{\textbf{Dương}}: $\ge 1$ bác sĩ vẽ box \emph{Nodule/Mass} (nốt và khối gộp một lớp); box hợp nhất bằng WBF.\\[1pt]
+    \textcolor{okgreen}{\textbf{Âm}}: mọi ảnh còn lại, kể cả ảnh có bệnh khác.};
+  % ---- vai trò ----
+  \node[fblue, text width=3.3cm, anchor=north] (tr) at (3.15,-1.35) {\textbf{Huấn luyện LoRA, B1, B2}\\âm:dương $\le$ 4:1 (C3: 1:1)};
+  \node[forange, text width=3.3cm, anchor=north] (va) at (7.0,-1.35) {\textbf{Chọn ngưỡng và cấu hình}\\$t_{90}$, $t_{95}$, \code{val\_sens90}};
+  \node[fred, text width=3.5cm, anchor=north] (te) at (11.4,-1.35) {\textbf{Đánh giá một lần}\\\code{test}, \code{test\_nih}, \code{test\_jsrt}};
+  \draw[farr] (3.15,-0.85) -- (tr.north);
+  \draw[farr] (6.75,-0.4) -- (6.75,-1.35);
+  \draw[farr] (8.1,-0.4) -- (8.1,-1.05) -| ([xshift=-0.9cm]te.north);
+  % ---- tập ngoài ----
+  \node[fb, text width=4.4cm, anchor=north west] (nih) at (0,-3.3) {\textbf{NIH ChestX-ray14} (\code{test\_nih})\\dương: ảnh có box Nodule/Mass\\âm: ``No Finding'' $\times 3$, khác bệnh nhân};
+  \node[fb, text width=4.4cm, anchor=north west] (js) at (4.95,-3.3) {\textbf{JSRT} (\code{test\_jsrt})\\154 ảnh có nốt (tâm, mm, độ mờ 1--5)\\93 ảnh không có nốt};
+  \node[fnote, anchor=north west, text width=5.2cm, align=left] at (10.1,-3.35) {Hai tập ngoài phân phối không tham gia huấn
+    luyện hay chọn ngưỡng; ngưỡng $t_{90}$ lấy từ VinBigData val được áp nguyên.};
+  \draw[farr] (nih.north) -- ++(0,0.3) -| ([xshift=0.2cm]te.south);
+  \draw[farr] (js.north) -- ++(0,0.3) -| ([xshift=0.2cm]te.south);
+\end{tikzpicture}
+\caption{Chia dữ liệu và định nghĩa nhãn. VinBigData chia 70/10/20 theo ảnh; validation chỉ dùng để chọn ngưỡng
+và cấu hình; ba tập test (một trong phân phối, hai ngoài phân phối) chỉ được đánh giá một lần. Số ca dương là ước
+tính từ~\cite{nguyen2022vindr}; số thật lấy từ \code{e0\_data.md} sau E0.}
+\label{fig:split}
+\end{figure}
+
+\begin{warnbox}
+\textbf{Rủi ro cỡ mẫu.} Tập huấn luyện của VinDr-CXR chỉ có 410/15.000 ảnh Nodule/Mass
+(2,73\%)~\cite{nguyen2022vindr}. Chia 70/10/20 còn khoảng 287 / 41 / 82 ảnh dương (ước tính), nên khoảng tin cậy
+của sensitivity trên test sẽ rộng (với 82 ca dương và sensitivity 0,60, nửa độ rộng CI 95\% xấp xỉ $\pm 0{,}11$).
+Nếu truy cập được, đồ án ưu tiên dùng tập test chính thức của VinDr-CXR (3.000 ảnh, 176 ảnh Nodule/Mass, nhãn
+đồng thuận 5 bác sĩ).
+\end{warnbox}
+
+\subsection{Tiền xử lý}
+
+\begin{itemize}
+  \item DICOM (VinBigData), PNG (NIH) và ảnh thô 12-bit (JSRT) được chuẩn hoá cường độ, chuyển thành PNG xám
+        896$\times$896; hệ số quy đổi toạ độ được lưu lại để đổi box về ảnh gốc.
+  \item Qwen2.5-VL được ép cùng số pixel ($896 \times 896$) để hai VLM nhận cùng đầu vào.
+  \item Kích thước nốt quy đổi theo diện tích box tương đối; riêng JSRT có kích thước tính bằng mm.
+\end{itemize}
+
+\subsection{Thống kê mô tả}
+
+Bảng~\ref{tab:data-stats} được điền từ \code{outputs/e0\_data.md} (sinh bởi \code{data\_stats.py} ở E0).
+
+\begin{table}[H]
+\centering
+\caption{Thống kê dữ liệu sau tiền xử lý (điền sau E0).}
+\label{tab:data-stats}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Tập} & \textbf{Số ảnh} & \textbf{Dương} & \textbf{Tỷ lệ dương} & \textbf{Diện tích box trung vị} \\
+\midrule
+VinBigData train & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+VinBigData val   & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+VinBigData test  & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+NIH ChestX-ray14 (test) & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+JSRT (test)      & 247 & 154 & 62\% & \textcolor{badred}{[--]} \\
+\bottomrule
+\end{tabular}
+\end{table}
