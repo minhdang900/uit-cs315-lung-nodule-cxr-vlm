@@ -71,10 +71,19 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    Đọc tốc độ ở thanh tqdm khi chạy xong (`s/it`, mỗi `it` là một ảnh, gồm cả tính điểm yes/no và sinh văn bản; không tính thời gian tải model) làm giây/ảnh, ghi vào `$O/budget.md`. Ngoại suy chi phí C0: giây/ảnh × số ảnh của `val test test_nih test_jsrt` × 3 lần chạy × 2 model. Nếu vượt ngân sách, xem mục "Ngân sách" bên dưới.
 
 ## 0. Mỗi phiên Colab
+Lần đầu tiên: clone repo vào Google Drive của bạn (một lần duy nhất; repo private nên cần GitHub token hoặc `gh auth login`):
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+%cd /content/drive/MyDrive
+!git clone https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git
+```
+Mỗi phiên (đổi `REPO` nếu bạn clone vào chỗ khác; dữ liệu nằm ở `$REPO/data/`, không vào git):
 ```python
 from google.colab import drive, userdata
 drive.mount('/content/drive')
-%cd "/content/drive/MyDrive/ClaudeAI/Projects/UIT-VNU/CS315.G12.LT.TTNT - MachineLearningAdvance/code"
+REPO = "/content/drive/MyDrive/uit-cs315-lung-nodule-cxr-vlm"
+%cd {REPO}/code
 import os; os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")   # lấy từ Colab Secrets
 !pip install -q -e ".[gpu]"
 !huggingface-cli login --token $HF_TOKEN
