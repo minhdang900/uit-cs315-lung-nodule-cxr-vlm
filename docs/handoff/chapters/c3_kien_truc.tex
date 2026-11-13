@@ -1,0 +1,187 @@
+\section{Kiến trúc hệ thống}
+\label{sec:arch}
+
+\subsection{Bức tranh tổng thể}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.35cm and 0.5cm, every node/.style={font=\scriptsize}]
+% cột 1: dữ liệu thô
+\node[box,minimum width=2.3cm] (vin) {VinBigData\\(DICOM/PNG + CSV)};
+\node[box,below=of vin,minimum width=2.3cm] (nih) {NIH ChestX-ray14\\(PNG + 2 CSV)};
+\node[box,below=of nih,minimum width=2.3cm] (jsrt) {JSRT\\(.IMG + 2 TXT)};
+% cột 2: tiền xử lý
+\node[obox,right=0.5cm of nih,minimum width=2.4cm,minimum height=3.2cm] (prep) {\textbf{Tiền xử lý}\\prepare\_*.py\\[2pt]WBF hợp nhất box\\đổi về 896 px\\chia 70/10/20};
+% cột 3: manifest
+\node[file,right=0.4cm of prep,minimum width=2.2cm,minimum height=1.6cm] (man) {manifest\_*.csv\\+ ảnh PNG 896};
+% cột 4: mô hình
+\node[gbox,right=0.5cm of man,yshift=1.6cm,minimum width=2.6cm] (cnn) {B1 DenseNet\\B2 YOLOv8};
+\node[gbox,below=of cnn,minimum width=2.6cm] (c0) {C0 VLM zero-shot};
+\node[gbox,below=of c0,minimum width=2.6cm] (lora) {C1--C4 VLM + LoRA};
+% cột 5
+\node[file,right=0.4cm of c0,minimum width=1.9cm,minimum height=1.6cm] (preds) {preds/*.jsonl};
+% hàng dưới: đánh giá, kiểm toán
+\node[rbox,below=1.3cm of preds,minimum width=2.5cm] (eval) {\textbf{Đánh giá}\\make\_report.py};
+\node[file,left=0.7cm of eval,minimum width=2.4cm] (rep) {report/*.csv|md|json};
+\node[rbox,left=1.3cm of rep,minimum width=2.2cm] (audit) {\textbf{Kiểm toán} E5\\run\_audit.py};
+\node[file,left=0.6cm of audit,minimum width=1.9cm] (aud) {audit/*.json};
+\draw[arr] (vin) -- (prep); \draw[arr] (nih) -- (prep); \draw[arr] (jsrt) -- (prep);
+\draw[arr] (prep) -- (man);
+\draw[arr] (man) -- (cnn); \draw[arr] (man) -- (c0); \draw[arr] (man) -- (lora);
+\draw[arr] (cnn) -- (preds); \draw[arr] (c0) -- (preds); \draw[arr] (lora) -- (preds);
+\draw[arr] (preds) -- (eval); \draw[arr] (eval) -- (rep);
+\draw[arr] (rep) -- node[below=2pt,lab]{$t_{90}$} (audit);
+\draw[arr] (audit) -- (aud);
+\end{tikzpicture}
+\caption{Luồng hệ thống: dữ liệu $\rightarrow$ tiền xử lý $\rightarrow$ mô hình $\rightarrow$ dự đoán $\rightarrow$ đánh giá $\rightarrow$ kiểm toán.}
+\label{fig:arch}
+\end{figure}
+
+Ý tưởng thiết kế: \textbf{mọi mô hình ghi ra cùng một định dạng} (một dòng JSON mỗi ảnh). Nhờ vậy một script đánh giá duy nhất
+(\code{make\_report.py}) chấm được cả CNN lẫn VLM theo cùng một cách.
+
+\subsection{Cấu trúc repo}
+
+\begin{figure}[H]
+\centering
+\begin{minipage}{0.92\textwidth}
+\small\ttfamily
+\begin{tabbing}
+xx\=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\=\kill
+uit-cs315-lung-nodule-cxr-vlm/\\
+\>code/                       \>\rmfamily gói Python \texttt{nodulecxr}, scripts, tests, RUNBOOK.md\\
+\>\quad src/nodulecxr/        \>\rmfamily thư viện (xem Bảng~\ref{tab:codemap})\\
+\>\quad scripts/              \>\rmfamily 11 script dòng lệnh\\
+\>\quad tests/                \>\rmfamily 75 kiểm thử CPU (pytest)\\
+\>report/                     \>\rmfamily báo cáo LaTeX: main.tex $\rightarrow$ main.pdf\\
+\>docs/design/                \>\rmfamily spec (văn bản có hiệu lực)\\
+\>docs/handoff/               \>\rmfamily sổ tay này + README.md\\
+\>docs/lit-review/lung-cancer-cxr/ \>\rmfamily ghi chú tổng quan (PDF không vào git)\\
+\>docs/archive/               \>\rmfamily kế hoạch triển khai cũ, chỉ để tra lịch sử\\
+\>docs/decisions.md           \>\rmfamily nhật ký quyết định\\
+\>data/                       \>\rmfamily \texttt{raw/} + \texttt{processed/}, \textbf{gitignore} (trừ \texttt{data/README.md})\\
+\>outputs/                    \>\rmfamily \textbf{gitignore}: kết quả chạy (tạo khi chạy)\\
+\end{tabbing}
+\end{minipage}
+\caption{Cấu trúc thư mục. \code{data/} và \code{outputs/} nằm ở gốc repo, ngang hàng với \code{code/}.}
+\label{fig:tree}
+\end{figure}
+
+Mọi lệnh trong RUNBOOK chạy từ \code{code/}. Vì vậy \code{../data/processed} là \code{<repo>/data/processed} và
+\code{../outputs} là \code{<repo>/outputs}.
+
+\subsection{Bản đồ code}
+
+\begin{center}
+\small
+\begin{longtable}{@{}P{4.1cm}P{5.8cm}P{4.8cm}@{}}
+\caption{Các module trong \code{code/src/nodulecxr/}.}\label{tab:codemap}\\
+\toprule
+\textbf{Module} & \textbf{Làm gì} & \textbf{Vào $\rightarrow$ Ra} \\
+\midrule\endfirsthead
+\toprule
+\textbf{Module} & \textbf{Làm gì} & \textbf{Vào $\rightarrow$ Ra} \\
+\midrule\endhead
+\code{records.py} & Định dạng manifest (12 cột), đọc/ghi JSONL, bỏ qua ảnh đã chạy (\code{done\_ids}). Hằng \code{IMG\_SIZE = 896}. & CSV/JSONL $\leftrightarrow$ DataFrame \\
+\code{images.py} & Đọc DICOM, đọc JSRT \code{.IMG}, đổi về ảnh xám 896$\times$896. & file ảnh $\rightarrow$ PIL \\
+\code{prompts.py} & Câu hỏi cố định (\code{QUESTION\_LOC}, \code{QUESTION\_CLS}), sinh đáp án mẫu, \textbf{parser} chịu lỗi. & text $\rightarrow$ (nhãn, box, ok) \\
+\code{strata.py} & Tầng kích thước: tertile diện tích box; mm cho JSRT. & box $\rightarrow$ small/medium/large \\
+\code{data/vinbig.py} & Hợp nhất box của nhiều bác sĩ bằng WBF; nhãn 1 nếu có Nodule/Mass. & train.csv $\rightarrow$ nhãn/ảnh \\
+\code{data/nih.py} & Ảnh dương = có box Nodule/Mass; ảnh âm = ``No Finding'' của bệnh nhân khác, gấp 3 lần. & 2 CSV $\rightarrow$ manifest \\
+\code{data/jsrt.py} & Đọc \code{CLNDAT\_EN.txt}, \code{NNDAT\_EN.txt}; dựng box vuông từ tâm + đường kính. & TXT $\rightarrow$ manifest \\
+\code{data/split.py} & Chia phân tầng 70/10/20; lấy mẫu ảnh âm; oversampling ca dương. & nhãn $\rightarrow$ split/chỉ số \\
+\code{data/stats.py} & Bảng mô tả dữ liệu cho E0. & manifest $\rightarrow$ Markdown \\
+\code{vlm/hf.py} & Tải MedGemma/Qwen từ Hugging Face, gắn adapter, sinh văn bản, tính $P(\text{yes})$. Chặn GPU không có bf16 thật. & ảnh + prompt $\rightarrow$ text, điểm \\
+\code{vlm/chat.py}, \code{vlm/scoring.py} & Dựng chat template; tính log-prob của hai câu trả lời ép buộc. & --- \\
+\code{vlm/predict.py} & Vòng lặp dự đoán chung, sinh từng dòng JSONL. & manifest $\rightarrow$ dòng JSONL \\
+\code{train/sft\_data.py} & Dựng mẫu SFT có che loss; collator; dataset. Chứa \code{LORA\_TARGET\_REGEX}. & ảnh + đáp án $\rightarrow$ tensor \\
+\code{train/losses.py}, \code{train/lora.py} & Cross-entropy có trọng số theo mẫu; cấu hình LoRA (r16, $\alpha$32); Trainer con. & --- \\
+\code{baselines/densenet.py} & DenseNet-121 của torchxrayvision + đầu nhị phân. & ảnh 224 px $\rightarrow$ logit \\
+\code{baselines/yolo.py} & Xuất dữ liệu sang định dạng YOLO; hàm chấm điểm. & manifest $\rightarrow$ data.yaml \\
+\code{metrics/detection.py} & Sens/spec/PPV/NPV/F1, chọn ngưỡng, AUC, ECE, Brier, PPV theo tỷ lệ bệnh. & (y, điểm) $\rightarrow$ số \\
+\code{metrics/localization.py} & IoU, khoảng cách tâm, trúng JSRT, FROC. & box $\rightarrow$ số \\
+\code{metrics/stats.py} & Bootstrap CI, McNemar, DeLong, Holm. & --- \\
+\code{eval/report.py} & Ghép tất cả: ngưỡng trên val, chỉ số + CI trên từng tập test, phân tầng, so sánh cặp, độ ổn định. & preds + manifest $\rightarrow$ bảng \\
+\code{audit/occlusion.py}, \code{audit/run.py} & Che vùng T1/T2/T3, mặt nạ phổi heuristic, tóm tắt $\Delta_{\text{occ}}$. & ảnh + điểm $\rightarrow$ JSON \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\begin{center}
+\small
+\begin{longtable}{@{}P{3.4cm}P{1.1cm}P{10.2cm}@{}}
+\caption{Các script trong \code{code/scripts/} (cờ bắt buộc lấy từ \code{argparse}).}\label{tab:scripts}\\
+\toprule
+\textbf{Script} & \textbf{Bước} & \textbf{Cờ bắt buộc $\rightarrow$ đầu ra} \\
+\midrule\endfirsthead
+\toprule
+\textbf{Script} & \textbf{Bước} & \textbf{Cờ bắt buộc $\rightarrow$ đầu ra} \\
+\midrule\endhead
+\code{prepare\_vinbig.py} & E0 & \code{--train-csv --out-root} + (\code{--png-dir --meta-csv}) hoặc \code{--dicom-dir} $\rightarrow$ \code{manifest\_vinbig.csv}, \code{vinbig/*.png} \\
+\code{prepare\_nih.py} & E0 & \code{--raw-dir --out-root} $\rightarrow$ \code{manifest\_nih.csv}, \code{nih/*.png} \\
+\code{prepare\_jsrt.py} & E0 & \code{--raw-dir --out-root} $\rightarrow$ \code{manifest\_jsrt.csv}, \code{jsrt/*.png} \\
+\code{draw\_boxes.py} & E0 & \code{--manifest --data-root --out} $\rightarrow$ ảnh PNG có vẽ box để kiểm tra bằng mắt \\
+\code{data\_stats.py} & E0 & \code{--manifests --out} $\rightarrow$ \code{e0\_data.md} và \code{e0\_data\_edges.json} (cùng thư mục) \\
+\code{train\_densenet.py} & E1 & \code{--manifests --data-root --out} $\rightarrow$ dòng JSONL config \code{B1} \\
+\code{train\_yolo.py} & E1 & \code{--manifests --data-root --work --out} $\rightarrow$ \code{best.pt}, dòng JSONL config \code{B2} \\
+\code{predict\_vlm.py} & E2--E4 & \code{--model --manifests --splits --data-root --config --out} $\rightarrow$ dòng JSONL (chạy tiếp được nếu bị ngắt) \\
+\code{train\_lora.py} & E3--E4 & \code{--model --mode --manifest --data-root --out} $\rightarrow$ \code{final/}, \code{checkpoint-*}, \code{timing.json} \\
+\code{make\_report.py} & sau E1--E4 & \code{--manifests --preds --edges-json --out} $\rightarrow$ 8 file trong \code{outputs/report/} \\
+\code{run\_audit.py} & E5 & \code{--scorer --manifest --split --data-root --threshold --edges-json --out} $\rightarrow$ \code{.json} + \code{.csv} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\subsection{Luồng file}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.3cm and 0.45cm, every node/.style={font=\scriptsize}]
+\node[file,minimum width=3.0cm] (m) {data/processed/\\manifest\_\{vinbig,nih,jsrt\}.csv};
+\node[file,below=of m,minimum width=3.0cm] (e0) {outputs/e0\_data.md\\outputs/e0\_data\_edges.json};
+\node[file,right=0.9cm of m,minimum width=3.2cm,yshift=-0.4cm] (p) {outputs/preds/\\B1, B2, C0-medgemma, C0-qwen,\\C1, C2, C3, C4 (.jsonl)};
+\node[file,right=0.9cm of p,minimum width=3.4cm,text width=3.3cm] (r) {outputs/report/\\thresholds.json\\val\_selection.csv\\summary.csv / .md\\summary\_per\_seed.csv\\strata.csv\\comparisons.csv\\run\_agreement.csv};
+\node[file,below=1.0cm of p,minimum width=3.2cm] (a) {outputs/audit/\\C0\_jsrt.json, C3\_jsrt.json,\\B2\_jsrt.json (+ .csv)};
+\node[file,below=0.3cm of a,minimum width=3.2cm] (lw) {outputs/lora/*/final\\outputs/yolo/seed*/weights/best.pt};
+\draw[arr] (m) -- (p); \draw[arr] (p) -- (r); \draw[arr] (m.south) -- (e0.north);
+\draw[arr] (e0.east) -- ++(0.3,0) |- ([yshift=-0.2cm]r.south west) ;
+\draw[arr] (r.south) |- node[pos=0.25,right,lab]{t90} (a.east);
+\draw[arr] (lw.north) -- (a.south);
+\end{tikzpicture}
+\caption{Các file sinh ra theo thứ tự. Tên file \code{audit/*.json} do bạn đặt qua \code{--out}; ở đây là ví dụ trong RUNBOOK.}
+\label{fig:fileflow}
+\end{figure}
+
+\subsubsection*{Một dòng manifest}
+
+Manifest có 12 cột: \code{image\_id, dataset, path, orig\_w, orig\_h, label, boxes, split, subtlety, size\_mm, patient\_id, n\_rads}.
+\code{path} là đường dẫn tương đối so với \code{--data-root}. \code{boxes} là JSON, tọa độ pixel trên ảnh 896 px.
+\code{split} là một trong \code{train, val, test, test\_nih, test\_jsrt}. \code{subtlety} và \code{size\_mm} chỉ có ở JSRT.
+
+\subsubsection*{Một dòng dự đoán JSONL}
+
+Mỗi ảnh một dòng. Ví dụ một dòng của VLM (theo \code{vlm/predict.py}; đã xuống dòng cho dễ đọc):
+
+\begin{lstlisting}
+{"image_id": "JPCLN001", "dataset": "jsrt", "split": "test_jsrt",
+ "score": 0.734,
+ "label_pred": 1,
+ "boxes_pred": [[412.0, 300.0, 470.0, 355.0, 0.734]],
+ "parse_ok": true,
+ "raw_text": "{\"nodule\": \"yes\", \"boxes\": [[412, 300, 470, 355]]}",
+ "config": "C3", "seed": 0, "run": 0, "model": "medgemma"}
+\end{lstlisting}
+
+\begin{itemize}
+\item \code{score}: $P(\text{yes})$ từ log-prob, dùng cho ROC/AUC và ngưỡng.
+\item \code{label\_pred}: nhãn đọc được từ câu trả lời sinh ra (1, 0, hoặc \code{null} nếu không đọc được).
+\item \code{boxes\_pred}: mỗi box có 5 số; số thứ 5 là điểm. Với VLM, điểm box = \code{score} của ảnh.
+\item \code{parse\_ok}: câu trả lời có phải JSON hợp lệ không. \code{raw\_text}: nguyên văn câu trả lời.
+\item Dòng của B1/B2 (\code{train\_densenet.py}, \code{train\_yolo.py}) có cùng các khóa, trừ \code{model}; \code{label\_pred} là \code{null}, \code{raw\_text} rỗng.
+\end{itemize}
+
+\begin{keybox}
+\code{make\_report.py} \textbf{đọc lại} \code{raw\_text} bằng parser hiện hành (\code{reparse\_predictions}). Nếu sau này bạn sửa parser,
+không cần chạy lại mô hình: chỉ cần chạy lại \code{make\_report.py}. Dòng trùng (\code{config, seed, run, split, image\_id}) chỉ giữ dòng cuối.
+Dòng có \code{config} là \code{pilot} bị bỏ qua.
+\end{keybox}

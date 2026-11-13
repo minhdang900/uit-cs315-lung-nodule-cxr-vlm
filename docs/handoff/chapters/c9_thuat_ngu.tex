@@ -1,0 +1,77 @@
+\section{Bảng thuật ngữ Việt--Anh}
+\label{sec:glossary}
+
+\begin{center}
+\small
+\begin{longtable}{@{}P{3.6cm}P{3.6cm}P{7.4cm}@{}}
+\toprule
+\textbf{Tiếng Việt} & \textbf{Tiếng Anh} & \textbf{Giải thích ngắn} \\
+\midrule\endfirsthead
+\toprule
+\textbf{Tiếng Việt} & \textbf{Tiếng Anh} & \textbf{Giải thích ngắn} \\
+\midrule\endhead
+X-quang ngực & chest X-ray (CXR) & Ảnh xám 2D chụp lồng ngực bằng tia X. \\
+Nốt phổi & lung nodule & Đốm tròn trong phổi, $\le 3$ cm. \\
+Khối & mass & Tổn thương phổi $> 3$ cm. Đồ án gộp với nốt thành lớp ``Nodule/Mass''. \\
+Độ mờ & subtlety & Mức khó thấy của nốt; JSRT chấm 1 (rất khó) đến 5 (rõ). \\
+Hộp bao & bounding box & Hình chữ nhật $[x_1, y_1, x_2, y_2]$ (pixel) quanh tổn thương. \\
+Hợp nhất box có trọng số & weighted boxes fusion (WBF) & Gộp box của nhiều bác sĩ thành một box đồng thuận. \\
+DICOM & DICOM & Định dạng ảnh y khoa chuẩn, chứa ảnh và thông tin máy chụp. \\
+Bản kê dữ liệu & manifest & File CSV liệt kê mọi ảnh: đường dẫn, nhãn, box, split. \\
+Mạng tích chập & convolutional neural network (CNN) & Mạng học đặc trưng ảnh bằng bộ lọc trượt. \\
+Bộ phân loại & classifier & Mô hình cho một nhãn/xác suất cho cả ảnh (B1). \\
+Bộ phát hiện & detector & Mô hình cho danh sách box kèm điểm (B2). \\
+Mô hình ngôn ngữ lớn & large language model (LLM) & Mô hình đoán token tiếp theo trong văn bản. \\
+Mô hình ngôn ngữ--thị giác & vision-language model (VLM) & LLM có thêm bộ mã hóa ảnh; nhận ảnh + chữ, trả lời bằng chữ. \\
+Token & token & Mẩu từ mà LLM xử lý. \\
+Bộ mã hóa ảnh & image encoder (ViT) & Phần biến ảnh thành dãy vector cho LLM. Đông cứng trong đồ án. \\
+Đông cứng & frozen & Trọng số không được cập nhật khi huấn luyện. \\
+Zero-shot & zero-shot & Dùng mô hình không qua huấn luyện thêm cho tác vụ (C0). \\
+Tinh chỉnh & fine-tuning & Huấn luyện tiếp mô hình có sẵn trên dữ liệu mới. \\
+Thích ứng hạng thấp & Low-Rank Adaptation (LoRA) & Học thêm $BA$ hạng $r$ nhỏ thay vì cập nhật cả $W$. \\
+Hạng & rank ($r$) & Số chiều của không gian cập nhật LoRA; đồ án dùng 16. \\
+Adapter & adapter & Bộ trọng số LoRA đã học, lưu riêng (thư mục \code{final/}). \\
+Tinh chỉnh có giám sát & supervised fine-tuning (SFT) & Huấn luyện bằng cặp câu hỏi--đáp án mẫu. \\
+Che loss & loss masking & Không tính loss trên token câu hỏi (nhãn $-100$). \\
+Entropy chéo & cross-entropy & Hàm loss đo độ sai của phân phối dự đoán token. \\
+Tích lũy gradient & gradient accumulation & Cộng gradient nhiều bước nhỏ rồi mới cập nhật một lần. \\
+Mất cân bằng lớp & class imbalance & Một lớp hiếm hơn hẳn lớp kia (ca dương $\approx$ 3\%). \\
+Lấy mẫu lặp & oversampling & Lặp lại mẫu lớp hiếm để cân bằng (C3). \\
+Chế độ báo bình thường & normal-mode failure & Mô hình gần như luôn nói ``không có nốt'': spec $\approx 1$, sens $\approx 0$. \\
+Bộ phân tích câu trả lời & parser & Hàm đọc nhãn và box từ câu trả lời dạng chữ. \\
+Nhiệt độ & temperature & Độ ngẫu nhiên khi sinh chữ; 0 = luôn chọn token xác suất cao nhất. \\
+Ma trận nhầm lẫn & confusion matrix & Bảng 2$\times$2: TP, FP, TN, FN. \\
+Độ nhạy & sensitivity / recall & TP/(TP+FN): bắt được bao nhiêu ca bệnh. \\
+Độ đặc hiệu & specificity & TN/(TN+FP): bỏ qua đúng bao nhiêu ca lành. \\
+Giá trị dự đoán dương & positive predictive value (PPV) & TP/(TP+FP): nói ``có'' thì đúng bao nhiêu. \\
+Giá trị dự đoán âm & negative predictive value (NPV) & TN/(TN+FN). \\
+Tỷ lệ bệnh & prevalence & Tỷ lệ ca dương trong tập; ảnh hưởng mạnh tới PPV. \\
+Ngưỡng & threshold ($t_{90}$) & Điểm cắt; $t_{90}$ cho specificity 0,90 trên val. \\
+Đường ROC & ROC curve & Sens theo (1 $-$ spec) khi thay đổi ngưỡng. \\
+Diện tích dưới đường & AUC (AUC-ROC, AUC-PR) & Tóm tắt đường ROC/PR thành một số. \\
+Đường FROC & free-response ROC & Sens theo số box báo nhầm mỗi ảnh. \\
+Giao trên hợp & Intersection over Union (IoU) & Diện tích giao / diện tích hợp của hai box. \\
+Hiệu chỉnh xác suất & calibration & Mức khớp giữa điểm dự đoán và tỷ lệ đúng thật. \\
+Sai số hiệu chỉnh kỳ vọng & expected calibration error (ECE) & Chênh lệch trung bình giữa điểm và tỷ lệ dương theo khoảng. \\
+Điểm Brier & Brier score & Trung bình $(s-y)^2$; bản balanced tính riêng hai lớp rồi lấy trung bình. \\
+Khoảng tin cậy & confidence interval (CI) & Khoảng chứa giá trị thật với độ tin cậy 95\%. \\
+Lấy mẫu lại & bootstrap & Rút mẫu có hoàn lại nhiều lần để ước lượng CI. \\
+Kiểm định McNemar & McNemar's test & So hai mô hình trên cùng ảnh qua các ca bất đồng. \\
+Kiểm định DeLong & DeLong's test & So hai AUC trên cùng tập ảnh. \\
+Hiệu chỉnh Holm & Holm correction & Điều chỉnh p-value khi so nhiều cặp. \\
+Phân tầng & stratification & Tính chỉ số riêng theo nhóm (kích thước, độ mờ). \\
+Tam phân vị & tertile & Chia thành 3 nhóm đều nhau theo một đại lượng. \\
+Phép che vùng & occlusion test & Che một vùng ảnh và xem đáp án có đổi không (T1/T2/T3). \\
+Tỷ lệ đổi đáp án & flip rate & Tỷ lệ ca ``yes'' chuyển thành ``no'' sau khi che. \\
+Quá khớp & overfitting & Học thuộc train, kém trên dữ liệu mới. \\
+Hạt giống ngẫu nhiên & random seed & Số khởi tạo bộ sinh ngẫu nhiên; cố định để tái lập. \\
+Rò rỉ dữ liệu & data leakage & Thông tin test lọt vào lúc huấn luyện hoặc lúc chọn. \\
+Trong / ngoài phân phối & in-distribution / out-of-distribution & Dữ liệu giống / khác nguồn dữ liệu huấn luyện. \\
+Tập kiểm định & validation set & Dùng để chọn ngưỡng và cấu hình. \\
+Tập kiểm tra & test set & Chỉ dùng để chấm điểm cuối, một lần. \\
+Nhánh & branch & Dòng phát triển riêng trong Git. \\
+Yêu cầu gộp & pull request (PR) & Đề nghị gộp một nhánh vào nhánh khác, kèm review. \\
+Thẻ & tag & Tên gắn cố định cho một commit (ví dụ \code{v0.1.0-handoff}). \\
+\bottomrule
+\end{longtable}
+\end{center}
