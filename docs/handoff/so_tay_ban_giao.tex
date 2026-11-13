@@ -1,0 +1,187 @@
+% ============================================================================
+%  SỔ TAY BÀN GIAO — CS315 Máy học nâng cao (UIT-VNU)
+%  Đề tài: Trợ lý AI phát hiện và định vị nốt phổi trên X-quang ngực
+%  Biên dịch:  latexmk -xelatex -interaction=nonstopmode so_tay_ban_giao.tex
+%  Ghi chú: mọi khối lstlisting chỉ chứa ký tự ASCII (xem ghi chú listings trong report/main.tex).
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+% ---------- Font & ngôn ngữ (chép từ report/main.tex) ----------
+\usepackage{fontspec}
+\setmainfont{lmroman12-regular.otf}[
+  BoldFont       = lmroman12-bold.otf,
+  ItalicFont     = lmroman12-italic.otf,
+  BoldItalicFont = lmroman10-bolditalic.otf,
+  SmallCapsFont  = lmromancaps10-regular.otf]
+\setsansfont{lmsans12-regular.otf}[BoldFont = lmsans10-bold.otf]
+\setmonofont{lmmono10-regular.otf}[Scale=0.95,BoldFont=lmmonolt10-bold.otf,ItalicFont=lmmono10-italic.otf]
+\usepackage[vietnamese,shorthands=off]{babel}
+
+% ---------- Trang ----------
+\usepackage[a4paper,top=2.3cm,bottom=2.3cm,left=2.5cm,right=2.2cm,headheight=15pt]{geometry}
+\usepackage{setspace}
+\setstretch{1.1}
+\setlength{\parskip}{0.3em}
+\setlength{\parindent}{0pt}
+\usepackage{microtype}
+\setlength{\emergencystretch}{3em}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\setlist{itemsep=0.15em,topsep=0.3em}
+
+% ---------- Toán, bảng, hình ----------
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,multirow,array,longtable}
+\usepackage{graphicx}
+\usepackage[table]{xcolor}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf,labelsep=period,justification=centering}
+\usepackage{float}
+\usepackage[section]{placeins}
+\usepackage{pifont}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric,shapes.misc,shapes.symbols,decorations.pathreplacing,patterns}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{fillbetween}
+\usepackage[most]{tcolorbox}
+\usepackage{listings}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=uitblue,citecolor=uitblue,urlcolor=uitblue,
+  pdftitle={CS315 - So tay ban giao - Tro ly AI phat hien not phoi tren X-quang nguc},
+  pdfauthor={Nhom 16 - CS315.G12.LT.TTNT}}
+
+% ---------- Màu & hộp nhấn mạnh (giống report/main.tex) ----------
+\definecolor{uitblue}{HTML}{2F5BB7}
+\definecolor{softgray}{HTML}{F4F5F7}
+\definecolor{warnorange}{HTML}{B85C00}
+\definecolor{okgreen}{HTML}{2E7D32}
+\definecolor{badred}{HTML}{B3261E}
+\definecolor{softblue}{HTML}{E8EEFA}
+\definecolor{softgreen}{HTML}{E7F3E8}
+\definecolor{softorange}{HTML}{FCEFE3}
+\definecolor{softred}{HTML}{FBE9E7}
+\newtcolorbox{keybox}[1][]{enhanced,breakable,colback=softgray,colframe=uitblue,
+  boxrule=0pt,leftrule=3pt,arc=0pt,left=8pt,right=8pt,top=5pt,bottom=5pt,#1}
+\newtcolorbox{warnbox}[1][]{enhanced,breakable,colback=orange!6,colframe=warnorange,
+  boxrule=0pt,leftrule=3pt,arc=0pt,left=8pt,right=8pt,top=5pt,bottom=5pt,#1}
+\newtcolorbox{dangerbox}[1][]{enhanced,breakable,colback=softred,colframe=badred,
+  boxrule=0pt,leftrule=3pt,arc=0pt,left=8pt,right=8pt,top=5pt,bottom=5pt,#1}
+\newtcolorbox{unsurebox}[1][]{enhanced,breakable,colback=white,colframe=black!45,
+  boxrule=0.4pt,arc=1pt,left=8pt,right=8pt,top=5pt,bottom=5pt,
+  title={\small\bfseries Chưa kiểm chứng được},coltitle=black,colbacktitle=black!8,#1}
+
+\lstset{basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,
+  frame=single,rulecolor=\color{black!20},backgroundcolor=\color{softgray},
+  numbers=none,breaklines=true,showstringspaces=false,
+  keywordstyle=\color{uitblue}\bfseries,commentstyle=\color{black!55}\itshape,
+  stringstyle=\color{okgreen},xleftmargin=4pt,xrightmargin=4pt,aboveskip=6pt,belowskip=6pt}
+% Quy ước: KHÔNG đặt chữ tiếng Việt có dấu trong lstlisting (lỗi đảo ký tự dưới XeTeX).
+
+% ---------- Tiêu đề mục ----------
+\titleformat{\section}{\normalfont\Large\bfseries\color{uitblue}}{\thesection}{0.8em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries}{\thesubsection}{0.8em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{\thesubsubsection}{0.8em}{}
+\titlespacing*{\section}{0pt}{0pt}{1.0em}
+\titlespacing*{\subsection}{0pt}{1.0em}{0.4em}
+\titlespacing*{\subsubsection}{0pt}{0.8em}{0.3em}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+
+% ---------- Tiện ích ----------
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\en}[1]{(\textit{#1})}
+\newcommand{\yes}{\textcolor{okgreen}{\ding{51}}}
+\newcommand{\no}{\textcolor{badred}{\ding{55}}}
+\newcommand{\cb}{$\square$\ }
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcolumntype{C}{>{\centering\arraybackslash}X}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ---------- Kiểu TikZ dùng chung ----------
+\tikzset{
+  box/.style={draw=uitblue,fill=softblue,rounded corners=2pt,align=center,font=\small,
+              minimum height=0.9cm,inner sep=4pt},
+  gbox/.style={box,draw=okgreen,fill=softgreen},
+  obox/.style={box,draw=warnorange,fill=softorange},
+  rbox/.style={box,draw=badred,fill=softred},
+  file/.style={draw=black!50,fill=white,align=center,font=\scriptsize\ttfamily,
+               minimum height=0.7cm,inner sep=3pt,tape,tape bend top=none},
+  arr/.style={-{Stealth[length=2.2mm]},thick,draw=black!65},
+  lab/.style={font=\scriptsize,text=black!70,align=center},
+}
+
+\addto\captionsvietnamese{%
+  \renewcommand{\contentsname}{Mục lục}%
+  \renewcommand{\listfigurename}{Danh sách hình vẽ}%
+  \renewcommand{\listtablename}{Danh sách bảng}%
+  \renewcommand{\figurename}{Hình}%
+  \renewcommand{\tablename}{Bảng}}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\color{black!60}CS315 --- Sổ tay bàn giao}
+\fancyhead[R]{\small\color{black!60}Trợ lý AI phát hiện nốt phổi trên X-quang ngực}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancypagestyle{plain}{\fancyhf{}\fancyfoot[C]{\small\thepage}\renewcommand{\headrulewidth}{0pt}}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+{\small ĐẠI HỌC QUỐC GIA THÀNH PHỐ HỒ CHÍ MINH\par}
+{\small TRƯỜNG ĐẠI HỌC CÔNG NGHỆ THÔNG TIN\par}
+\vspace{1.2cm}
+{\large\bfseries CS315 --- MÁY HỌC NÂNG CAO\par}
+\vspace{0.8cm}
+\rule{\textwidth}{0.8pt}\par\vspace{0.5cm}
+{\LARGE\bfseries SỔ TAY BÀN GIAO\par}
+\vspace{0.3cm}
+{\large Trợ lý AI phát hiện và định vị nốt phổi trên X-quang ngực:\\
+tinh chỉnh LoRA mô hình ngôn ngữ--thị giác cỡ nhỏ\par}
+\vspace{0.3cm}
+\rule{\textwidth}{0.8pt}\par
+\vspace{1.0cm}
+\begin{keybox}[width=0.86\textwidth]
+\small
+\textbf{Sổ tay này dành cho ai?} Cho nhóm sinh viên nhận tiếp đồ án. Bạn chỉ cần biết Python và
+máy học cơ bản. Bạn chưa cần biết VLM, LoRA, Colab GPU hay ảnh y khoa: sổ tay giải thích từ đầu.
+
+\medskip
+\textbf{Trạng thái lúc bàn giao (2026-11-13):}
+\begin{itemize}[leftmargin=1.2em]
+\item Pipeline đã viết xong. 75 kiểm thử trên CPU qua (\code{pytest -q} trong \code{code/}).
+\item Phần chạy GPU (transformers, peft, ultralytics, torchxrayvision) mới chỉ được kiểm tra cú pháp.
+      Phiên GPU đầu tiên \textbf{phải} chạy 7 mục ``Kiểm tra bắt buộc trên Colab'' trong RUNBOOK.
+\item Chưa tải bộ dữ liệu nào. Chưa chạy thí nghiệm nào. Báo cáo còn các ô đỏ \textcolor{badred}{[--]}.
+\end{itemize}
+\end{keybox}
+\vspace{0.6cm}
+\begin{tabular}{r l}
+Repo: & \code{github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm} (private)\\
+Tag bàn giao: & \code{v0.1.0-handoff}\\
+Tài liệu gốc: & \code{docs/design/2026-11-12-lung-nodule-cxr-vlm-lora-design.md} (spec)\\
+Lệnh chạy: & \code{code/RUNBOOK.md}\\
+\end{tabular}
+\vfill
+{\small TP. Hồ Chí Minh, tháng 11 năm 2026\par}
+\end{titlepage}
+
+\tableofcontents
+\clearpage
+
+\input{chapters/c0_bat_dau}
+\input{chapters/c1_de_tai}
+\input{chapters/c2_kien_thuc_nen}
+\input{chapters/c3_kien_truc}
+\input{chapters/c4_thi_nghiem}
+\input{chapters/c5_runbook}
+\input{chapters/c6_git}
+\input{chapters/c7_quy_tac}
+\input{chapters/c8_hoi_dap}
+\appendix
+\input{chapters/c9_thuat_ngu}
+
+\end{document}

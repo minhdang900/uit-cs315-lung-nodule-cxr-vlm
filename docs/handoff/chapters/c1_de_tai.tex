@@ -1,0 +1,58 @@
+\section{Đề tài trong một trang}
+\label{sec:topic}
+
+\subsection{Bài toán}
+
+Ung thư phổi là nguyên nhân tử vong do ung thư hàng đầu. Nhiều ca lần đầu lộ ra dưới dạng một
+\textbf{nốt} hoặc \textbf{khối} trên X-quang ngực. Nốt nhỏ và mờ rất dễ bị bỏ sót.
+
+Mô hình ngôn ngữ--thị giác \en{vision-language model, VLM} là mô hình nhận ảnh và câu hỏi, rồi trả lời bằng chữ.
+Người ta đang giới thiệu VLM như ``trợ lý đọc phim''. Nhưng các đánh giá độc lập năm 2026 cho thấy VLM gần như
+\textbf{không thấy nốt phổi}. Ví dụ, MedGemma-4B chỉ phát hiện 5,2\% nốt trên bộ JSRT, dù không báo nhầm ca nào
+(specificity 100\%). Trong khi đó, phần mềm CNN chuyên dụng đạt AUROC 0,92--0,99. Kiểu sai ``luôn nói bình thường''
+này gọi là \textbf{chế độ báo bình thường} \en{normal-mode failure}.
+
+\subsection{Đồ án làm gì}
+
+Đồ án xây một nguyên mẫu trợ lý AI. Trợ lý trả lời: ảnh có nốt/khối không, và nếu có thì ở đâu (bounding box).
+Có ba phần việc:
+
+\begin{enumerate}
+\item \textbf{Benchmark}: so hai VLM nhỏ (MedGemma-4B, Qwen2.5-VL-3B) với hai CNN (DenseNet-121, YOLOv8) trên cùng cách chia dữ liệu,
+      trên ba bộ: VinBigData, NIH ChestX-ray14, JSRT.
+\item \textbf{Tinh chỉnh LoRA} MedGemma-4B: chỉ phân loại; phân loại kèm box; có và không cân bằng lớp.
+\item \textbf{Kiểm toán ``nhìn đúng chỗ''}: đo IoU, và thử che nốt so với che một vùng ngẫu nhiên cùng diện tích.
+\end{enumerate}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.5cm and 0.6cm]
+\node[box,minimum width=2.6cm] (img) {Ảnh X-quang ngực\\(896$\times$896)};
+\node[box,right=1.1cm of img,minimum width=3.0cm] (q) {Câu hỏi cố định:\\\itshape ``Is there a lung nodule\\or mass\ldots? Answer in JSON.''};
+\node[gbox,below=0.9cm of $(img)!0.5!(q)$,minimum width=4.5cm] (vlm) {VLM (MedGemma-4B + LoRA)};
+\node[file,below=0.8cm of vlm,minimum width=6.4cm] (out) {\{"nodule": "yes", "boxes": [[412, 300, 470, 355]]\}};
+\draw[arr] (img) -- (vlm); \draw[arr] (q) -- (vlm); \draw[arr] (vlm) -- (out);
+\node[lab,right=0.3cm of out] {đầu ra JSON:\\có/không + box};
+\end{tikzpicture}
+\caption{Trợ lý nhận ảnh và một câu hỏi cố định, trả lời bằng JSON.}
+\label{fig:assistant}
+\end{figure}
+
+\subsection{Câu hỏi nghiên cứu và tiêu chí thành công}
+
+\begin{keybox}
+\textbf{Q1.} LoRA có đưa sensitivity của VLM, đo ở specificity 0,90, lên \textbf{ít nhất 0,60} trên tập test VinBigData (trong phân phối) không?
+
+\textbf{Q2.} Cải thiện đó có còn khi kiểm tra ngoài phân phối (NIH, JSRT) và khi che nốt không?
+
+\textbf{Tiêu chí thành công} (spec §2): có bảng so sánh 7 cấu hình $\times$ 3 tập test, kèm khoảng tin cậy 95\%,
+và kết luận được Q1, Q2 \emph{dù theo hướng nào}. Kết quả âm tính (LoRA không đạt 0,60) vẫn là kết quả hợp lệ.
+\end{keybox}
+
+Các khái niệm ``sensitivity ở specificity 0,90'', ``trong/ngoài phân phối'', ``khoảng tin cậy'' được giải thích ở §\ref{sec:background}.
+
+\begin{warnbox}
+\textbf{Không viết ``ngang bác sĩ''.} Ngưỡng 0,60 nằm cùng khoảng với sensitivity của người đọc trong vài nghiên cứu,
+nhưng các nghiên cứu đó không đo ở specificity 0,90. Spec §2 cấm viết ``ngang bác sĩ''. Đây là \textbf{nguyên mẫu nghiên cứu},
+không phải công cụ lâm sàng.
+\end{warnbox}

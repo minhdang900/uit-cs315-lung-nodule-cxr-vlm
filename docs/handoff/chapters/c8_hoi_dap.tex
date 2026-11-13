@@ -1,0 +1,52 @@
+\section{Hỏi đáp thường gặp}
+\label{sec:faq}
+
+\begin{description}[leftmargin=0pt,style=nextline,itemsep=0.6em]
+
+\item[Tôi không có GPU ở nhà. Có làm được gì không?]
+Có. Đọc tài liệu, chạy kiểm thử CPU, chạy 3 script \code{prepare\_*}, \code{draw\_boxes.py}, \code{data\_stats.py}, \code{make\_report.py}
+đều không cần GPU. Chỉ huấn luyện và dự đoán VLM/CNN mới cần Colab.
+
+\item[Vì sao không dùng T4 miễn phí?]
+MedGemma cần bf16 thật. T4 chỉ giả lập bf16, và fp16 làm MedGemma tràn số. Code chủ động từ chối T4 để tránh kết quả rác.
+
+\item[Vì sao lấy điểm từ log-prob mà không dùng câu trả lời yes/no?]
+Câu trả lời yes/no chỉ cho một điểm trên đường ROC. Ta cần điểm liên tục để vẽ ROC, tính AUC và chọn ngưỡng ở specificity 0,90.
+Câu trả lời sinh ra vẫn được giữ để đo \code{raw\_sens}, tỷ lệ parse lỗi và lấy box.
+
+\item[Spec nói 70/10/20, nhưng nếu dùng tập test chính thức VinDr-CXR thì sao?]
+Khi có \code{--official-test-csv}, code chia VinBigData Kaggle thành 85/15 (train/val) và dùng tập chính thức làm \code{test}. Ghi lựa chọn vào \code{decisions.md}.
+
+\item[Tôi muốn thử prompt khác. Có được không?]
+Trong điều kiện chính thì \textbf{không}: prompt cố định là một phần của thiết kế (spec §5.3). Nếu muốn, làm thành phân tích phụ trên nhánh \code{exp/},
+đặt \code{--config} mới (không trùng C0--C4), và chọn chỉ trên val.
+
+\item[Kết quả C3 trên test tệ hơn C2. Tôi có đổi sang C2 cho E5 không?]
+Không, nếu C3 có \code{val\_sens90} trung bình cao hơn. Cấu hình cho E4/E5 chọn theo val. Kết quả test là kết quả, không phải tiêu chí chọn.
+
+\item[Câu trả lời của VLM không parse được thì tính sao?]
+\code{raw\_sens}/\code{raw\_spec} coi chúng là ``no''. Tỷ lệ \code{no\_on\_pos}, \code{yes\_on\_neg} chỉ tính trên câu parse được. Tỷ lệ \code{unparsed} báo riêng.
+Điểm $P(\text{yes})$ (dùng cho AUC và $t_{90}$) không phụ thuộc parse.
+
+\item[Sửa parser rồi có phải chạy lại mô hình không?]
+Không. \code{make\_report.py} đọc lại \code{raw\_text} bằng parser hiện hành. Chạy lại \code{make\_report.py} là đủ.
+
+\item[Một lượt LoRA chạy quá 3 giờ. Làm gì?]
+Cắt theo đúng thứ tự §\ref{sec:budget}: \code{--neg-per-pos 2}; (chỉ Qwen) giảm độ phân giải; \code{--epochs 2}; C1 chỉ 1 seed. Ghi vào \code{budget.md}.
+Áp cùng mức cắt cho mọi cấu hình cần so sánh với nhau.
+
+\item[Colab ngắt giữa lúc huấn luyện LoRA. Có tiếp tục được không?]
+\code{train\_lora.py} không có cờ chạy tiếp. Checkpoint mỗi epoch vẫn được lưu trong thư mục \code{checkpoint-*} bên trong \code{\$O/lora/<cfg>-s<seed>/}, nhưng chạy lại lệnh sẽ huấn luyện từ đầu.
+Thêm chức năng chạy tiếp là một việc \code{feature/} hợp lệ (cần test và PR).
+
+\item[Có cần chạy C5, C6 không?]
+Không. Đó là phần mở rộng ngoài cam kết. Chỉ làm khi mọi thứ khác xong.
+
+\item[Ai quyết định khi sổ tay, RUNBOOK và spec khác nhau?]
+Thứ tự ưu tiên: spec $>$ RUNBOOK $>$ sổ tay. Báo sai lệch bằng một issue hoặc PR sửa tài liệu thấp hơn.
+
+\item[Dữ liệu để ở đâu cho cả nhóm cùng dùng?]
+Mỗi bạn chạy Colab trên Drive của mình, nên mỗi bản clone cần \code{data/raw/} và \code{data/processed/} riêng (xem \code{data/README.md}). Có thể chia sẻ thư mục Drive \emph{riêng tư} trong nhóm,
+nhưng không chia sẻ công khai và không đưa ra ngoài nhóm (giấy phép dữ liệu).
+
+\end{description}
