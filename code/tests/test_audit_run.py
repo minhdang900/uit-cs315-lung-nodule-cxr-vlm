@@ -40,3 +40,14 @@ def test_t2_box_area_equals_expanded_t1_area():
     audit_images(score, pos, neg, lambda p: img, 0.5, lambda im: heuristic_lung_mask(), edges=(0.001, 0.01))
     orig, t1, t2, _ = counts
     assert t1 - orig > 0 and t2 - orig == t1 - orig
+
+
+def test_audit_size_bin_uses_mm_when_present():
+    box = [200, 300, 260, 360]
+    img = _img_with_blob(box)
+    pos = pd.DataFrame({"image_id": ["p", "q"], "path": ["p", "q"], "boxes": [[box], [box]], "subtlety": [3, 3],
+                        "size_mm": [12.0, None]})
+    neg = pd.DataFrame({"image_id": ["n"], "path": ["n"]})
+    df = audit_images(lambda im: 0.0, pos, neg, lambda p: img, 0.5, lambda im: heuristic_lung_mask(),
+                      edges=(0.001, 0.01))
+    assert list(df.size_bin) == ["10–20mm", "medium"]
