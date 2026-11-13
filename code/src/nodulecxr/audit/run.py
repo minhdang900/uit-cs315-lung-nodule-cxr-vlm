@@ -16,9 +16,10 @@ def audit_images(score_fn, positives, negatives, load_image, threshold, lung_mas
         img = load_image(r.path)
         boxes = [list(b) for b in r.boxes]
         s_orig = score_fn(img)
-        s_t1 = score_fn(occlude(img, [expand_box(b) for b in boxes]))
+        exp = [expand_box(b) for b in boxes]
+        s_t1 = score_fn(occlude(img, exp))
         mask = lung_mask_fn(img)
-        rand = [sample_random_box(b[2] - b[0], b[3] - b[1], mask, boxes, rng) for b in boxes]
+        rand = [sample_random_box(e[2] - e[0], e[3] - e[1], mask, exp, rng) for e in exp]
         t2_ok = all(b is not None for b in rand)
         s_t2 = score_fn(occlude(img, [b for b in rand if b is not None])) if t2_ok else float("nan")
         neg = neg_list[int(rng.integers(len(neg_list)))]
@@ -33,10 +34,11 @@ def audit_images(score_fn, positives, negatives, load_image, threshold, lung_mas
 def _summary(df, thr):
     o = (df.s_orig >= thr).astype(int)
     ok = df.t2_ok.astype(bool)
-    f1 = flip_rate(o, (df.s_t1 >= thr).astype(int))
+    f1_all = flip_rate(o, (df.s_t1 >= thr).astype(int))
+    f1 = flip_rate(o[ok], (df.s_t1[ok] >= thr).astype(int))  # paired subset
     f2 = flip_rate(o[ok], (df.s_t2[ok] >= thr).astype(int))
-    return {"n": int(len(df)), "n_orig_yes": int(o.sum()), "flip_t1": f1, "flip_t2": f2,
-            "delta": f1 - f2, "yes_rate_t3": float((df.s_t3 >= thr).mean())}
+    return {"n": int(len(df)), "n_orig_yes": int(o.sum()), "n_t2_ok": int(ok.sum()),
+            "flip_t1_all": f1_all, "flip_t1": f1, "flip_t2": f2, "delta": f1 - f2, "yes_rate_t3": float((df.s_t3 >= thr).mean())}
 
 
 def summarize_audit(df, threshold) -> dict:
