@@ -1,6 +1,7 @@
 """E5: occlusion audit for a VLM config (C0 or best LoRA) or B2 on one test split."""
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -62,7 +63,7 @@ def main():
     mask_fn = lung_mask_xrv if a.lung_mask == "xrv" else (lambda im: heuristic_lung_mask())
     res = audit_images(score_fn, df[df.label == 1], df[df.label == 0],
                        lambda p: load_image(a.data_root, p), a.threshold, mask_fn, edges)
-    res.to_csv(a.out.replace(".json", ".csv"), index=False)
+    res.to_csv(Path(a.out).with_suffix(".csv"), index=False)
     with open(a.out, "w") as f:
         json.dump(summarize_audit(res, a.threshold), f, indent=2, default=float)
 
