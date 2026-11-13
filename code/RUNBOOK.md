@@ -32,9 +32,9 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
 3. **Loss đầu tiên của pilot 64 mẫu.** Chạy `train_lora.py ... --max-train 160 --epochs 1` (xem E3; 160 mẫu với grad-accum 8 cho 20 bước tối ưu nên `loss` được ghi ở bước 10 và 20). Dòng log đầu tiên (`logging_steps=10`) phải có `loss` khoảng 0,5–3. Nếu ~10–25 nghĩa là gradient accumulation bị chia hai lần: dừng và sửa. Đọc thêm `train_loss` cuối cùng trong log/`trainer_state.json`.
 4. **Loại GPU.**
    ```python
-   import torch; print(torch.cuda.get_device_name(), torch.cuda.is_bf16_supported())
+   import torch; print(torch.cuda.get_device_name(), torch.cuda.get_device_capability())
    ```
-   Phải là L4 hoặc A100 và `True`.
+   Phải là L4 hoặc A100, và số đầu của `get_device_capability()` phải ≥ 8 (bf16 thật). Không dựa vào `torch.cuda.is_bf16_supported()`: T4 (7.5) cũng trả `True` nhờ giả lập.
 5. **Smoke YOLO 1 epoch.** Chạy:
    ```python
    from ultralytics import YOLO

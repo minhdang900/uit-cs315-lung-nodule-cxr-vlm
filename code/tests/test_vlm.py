@@ -52,3 +52,14 @@ def test_token_logprob_sum():
     ids = torch.tensor([0, 1, 0])
     # tokens from position 1: P(ids[1]=1 | pos0)=0.5, P(ids[2]=0 | pos1)=0.25
     assert token_logprob_sum(logits, ids, 1) == pytest.approx(math.log(0.5) + math.log(0.25))
+
+
+@pytest.mark.parametrize("avail,cap,expected", [(False, (8, 0), False), (True, (7, 5), False),
+                                                (True, (8, 9), True), (True, (9, 0), True)])
+def test_bf16_capable_requires_ampere(monkeypatch, avail, cap, expected):
+    import torch
+    from nodulecxr.vlm.hf import bf16_capable
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: avail)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda *a: cap)
+    monkeypatch.setattr(torch.cuda, "is_bf16_supported", lambda *a, **k: True)  # T4 emulation must not pass
+    assert bf16_capable() is expected

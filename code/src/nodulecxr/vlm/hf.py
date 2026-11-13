@@ -9,14 +9,20 @@ from nodulecxr.vlm.scoring import first_divergence, token_logprob_sum, two_way_p
 MODEL_IDS = {"medgemma": "google/medgemma-4b-it", "qwen": "Qwen/Qwen2.5-VL-3B-Instruct"}
 
 
+def bf16_capable() -> bool:
+    """Native bf16 (compute capability >= 8: A100/L4). is_bf16_supported() also passes T4 via emulation."""
+    import torch
+    return bool(torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8)
+
+
 def load_base(key: str, dtype=None):
     import torch
     from transformers import AutoProcessor
     if dtype is None:
-        bf16_ok = torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+        bf16_ok = bf16_capable()
         if key == "medgemma" and not bf16_ok:
             raise RuntimeError("MedGemma needs a bf16-capable GPU (L4/A100); fp16 overflows")
-        dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16
+        dtype = torch.bfloat16 if bf16_ok else torch.float16
     mid = MODEL_IDS[key]
     if key == "qwen":
         from transformers import Qwen2_5_VLForConditionalGeneration as M
