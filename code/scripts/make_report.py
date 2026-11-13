@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from nodulecxr.eval.report import (TEST_SPLITS, _with_labels, aggregate_seeds, compare_configs,
-                                   compute_thresholds, evaluate_all, run_agreement)
+                                   compute_thresholds, evaluate_all, run_agreement, val_selection)
 from nodulecxr.records import read_jsonl, read_manifest
 
 COLS = ["sens", "spec", "sens_at_spec95", "auc_roc", "auc_pr", "ece", "balanced_brier", "ppv_prev_1pct",
@@ -25,9 +25,12 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     man = pd.concat([read_manifest(m) for m in a.manifests])
     preds = pd.concat([read_jsonl(p) for p in glob.glob(a.preds)], ignore_index=True)
+    preds = preds.drop_duplicates(subset=["config", "seed", "run", "split", "image_id"], keep="last")
     preds = preds[~preds.config.isin(["pilot"])]
     edges = tuple(pd.read_json(a.edges_json, typ="series").tolist())
-    thr = compute_thresholds(_with_labels(preds, man))
+    labelled = _with_labels(preds, man)
+    thr = compute_thresholds(labelled)
+    val_selection(labelled, thr).to_csv(out / "val_selection.csv", index=False)
     (out / "thresholds.json").write_text(json.dumps({f"{c}|{s}|{r}": v for (c, s, r), v in thr.items()}, indent=2))
     summary, strata = evaluate_all(preds, man, edges)
     summary.to_csv(out / "summary_per_seed.csv", index=False)
