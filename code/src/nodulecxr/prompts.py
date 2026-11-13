@@ -14,8 +14,10 @@ QUESTION_CLS = "Is there a lung nodule or mass on this chest X-ray? Answer in JS
 ANSWER_PREFIX = '{"nodule": "'
 
 _FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.M)
-_JSON_RE = re.compile(r"\{.*\}", re.S)
-_LABEL_RE = re.compile(r'"?nodule"?\s*[:=]\s*"?(yes|no)\b', re.I)
+_LABEL_RE = re.compile(r'"?nodule\w*"?\s*[:=]\s*"?(yes|no|true|false)\b', re.I)
+_NODULE_KEY_RE = re.compile(r"^nodule", re.I)
+_BOX_KEYS = ("boxes", "bounding_boxes", "bbox", "bboxes")
+_DECODER = json.JSONDecoder()
 
 
 def build_target(label: int, boxes, with_boxes: bool = True) -> str:
@@ -33,6 +35,8 @@ class ParsedAnswer:
 
 
 def _clean_boxes(raw, size: int) -> list:
+    if isinstance(raw, (list, tuple)) and len(raw) >= 4 and all(isinstance(v, (int, float)) for v in raw[:4]):
+        raw = [raw]  # a single flat box, e.g. "bbox": [x1, y1, x2, y2]
     out = []
     for b in raw if isinstance(raw, list) else []:
         if isinstance(b, dict):
@@ -50,18 +54,48 @@ def _clean_boxes(raw, size: int) -> list:
     return out
 
 
+def _label_value(v) -> Optional[int]:
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, str):
+        s = re.sub(r"[^\w]", "", v).lower()
+        if s in ("yes", "true"):
+            return 1
+        if s in ("no", "false"):
+            return 0
+    return None
+
+
+def _label_from_dict(d: dict) -> Optional[int]:
+    key = "nodule" if "nodule" in d else next(
+        (k for k in d if isinstance(k, str) and _NODULE_KEY_RE.match(k)), None)
+    return None if key is None else _label_value(d[key])
+
+
+def _boxes_from_dict(d: dict):
+    return next((d[k] for k in _BOX_KEYS if k in d), [])
+
+
+def _dict_candidates(t: str):
+    """Every JSON object that decodes starting at some '{', in order of position."""
+    i = t.find("{")
+    while i != -1:
+        try:
+            obj, _ = _DECODER.raw_decode(t, i)
+        except json.JSONDecodeError:
+            obj = None
+        if isinstance(obj, dict):
+            yield obj
+        i = t.find("{", i + 1)
+
+
 def parse_answer(text: str, size: int = IMG_SIZE) -> ParsedAnswer:
     t = _FENCE_RE.sub("", text or "").strip()
-    m = _JSON_RE.search(t)
-    if m:
-        try:
-            d = json.loads(m.group(0))
-        except json.JSONDecodeError:
-            d = None
-        if isinstance(d, dict) and str(d.get("nodule", "")).lower() in ("yes", "no"):
-            label = 1 if str(d["nodule"]).lower() == "yes" else 0
-            return ParsedAnswer(label, _clean_boxes(d.get("boxes", []), size) if label else [], True)
+    for d in _dict_candidates(t):
+        label = _label_from_dict(d)
+        if label is not None:
+            return ParsedAnswer(label, _clean_boxes(_boxes_from_dict(d), size) if label else [], True)
     m = _LABEL_RE.search(t)
     if m:
-        return ParsedAnswer(1 if m.group(1).lower() == "yes" else 0, [], False)
+        return ParsedAnswer(1 if m.group(1).lower() in ("yes", "true") else 0, [], False)
     return ParsedAnswer(None, [], False)
