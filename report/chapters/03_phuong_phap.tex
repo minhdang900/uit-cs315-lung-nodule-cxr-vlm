@@ -1,0 +1,367 @@
+% ============================================================================
+%  CHƯƠNG 3. PHƯƠNG PHÁP
+% ============================================================================
+\clearpage
+\section{Phương pháp}
+\label{sec:method}
+
+\subsection{Kiến trúc hệ thống}
+
+Hình~\ref{fig:arch} là kiến trúc tổng thể của hệ thống, chia thành sáu tầng. Mỗi tầng ứng với một nhóm module
+trong gói \code{nodulecxr} và một nhóm script trong \code{code/scripts/}. Dữ liệu đi một chiều từ trên xuống.
+Ảnh gốc của ba nguồn được chuẩn hoá thành PNG 896$\times$896 và một file \code{manifest\_*.csv} cho mỗi nguồn.
+Mọi mô hình, VLM hay CNN, đều ghi dự đoán theo cùng một định dạng JSONL. Một chương trình đánh giá duy nhất
+(\code{make\_report.py}) đọc các file này, chọn ngưỡng trên validation và sinh mọi bảng của báo cáo. Kiểm toán E5
+dùng ngưỡng và cấu hình do tầng đánh giá chọn. Nhờ vậy, VLM và CNN được so trên cùng split, cùng ngưỡng và
+cùng mã tính chỉ số.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm, fb/.append style={font=\scriptsize, minimum height=0.8cm},
+    bandlbl/.append style={font=\scriptsize}]
+  % ---- nền các tầng: tâm tầng i tại y = -1.75 i ----
+  \foreach \y in {0,-1.75,-3.5,-5.25,-7.0,-8.75}{\draw[band] (0,\y-0.72) rectangle (15.4,\y+0.72);}
+  \node[bandlbl] at (0.1,0)     {\textbf{1. Nguồn dữ liệu}\\Kaggle, NIH, JSRT};
+  \node[bandlbl] at (0.1,-1.75) {\textbf{2. Tiền xử lý (E0)}\\\code{data/}, \code{images.py}\\\code{prepare\_*.py}};
+  \node[bandlbl] at (0.1,-3.5)  {\textbf{3. Mô hình}\\\code{vlm/}, \code{train/}\\\code{baselines/}};
+  \node[bandlbl] at (0.1,-5.25) {\textbf{4. Dự đoán}\\\code{predict\_vlm.py}\\\code{train\_*.py}};
+  \node[bandlbl] at (0.1,-7.0)  {\textbf{5. Đánh giá}\\\code{metrics/}, \code{eval/}\\\code{make\_report.py}};
+  \node[bandlbl] at (0.1,-8.75) {\textbf{6. Kiểm toán (E5)}\\\code{audit/}\\\code{run\_audit.py}};
+  % ---- tầng 1 ----
+  \node[fb, text width=3.95cm] (vin)  at (4.9,0)  {\textbf{VinBigData / VinDr-CXR}\\train · val · test (70/10/20)};
+  \node[fb, text width=3.55cm] (nih)  at (9.3,0)  {\textbf{NIH ChestX-ray14}\\\code{test\_nih}, ngoài phân phối};
+  \node[fb, text width=3.55cm] (jsrt) at (13.5,0) {\textbf{JSRT}\\\code{test\_jsrt}, độ mờ 1--5};
+  % ---- tầng 2 ----
+  \node[fb, text width=2.6cm] (p1) at (4.225,-1.75)  {DICOM, PNG, raw\\$\rightarrow$ PNG 896$\times$896};
+  \node[fb, text width=2.6cm] (p2) at (7.475,-1.75)  {Hợp nhất box\\bằng WBF (IoU 0,4)};
+  \node[fb, text width=2.6cm] (p3) at (10.725,-1.75) {\code{manifest\_*.csv}\\nhãn, box, split};
+  \node[fb, text width=2.6cm] (p4) at (13.975,-1.75) {\code{data\_stats.py}\\\code{e0\_data.md}, \code{edges}};
+  % ---- tầng 3 ----
+  \node[fgray,  text width=2.0cm] (c0)  at (3.94,-3.5)  {\textbf{C0} zero-shot\\MedGemma, Qwen};
+  \node[fblue,  text width=2.0cm] (c13) at (6.52,-3.5)  {\textbf{C1--C3}\\LoRA MedGemma};
+  \node[fblue,  text width=2.0cm] (c4)  at (9.10,-3.5)  {\textbf{C4}\\LoRA Qwen};
+  \node[fgreen, text width=2.0cm] (b1)  at (11.68,-3.5) {\textbf{B1}\\DenseNet-121};
+  \node[fgreen, text width=2.0cm] (b2)  at (14.26,-3.5) {\textbf{B2}\\YOLOv8};
+  % ---- tầng 4 ----
+  \node[fb, text width=12.3cm] (pred) at (9.1,-5.25) {\code{outputs/preds/<cfg>.jsonl}, mỗi dòng một ảnh:\\
+    \code{image\_id}, \code{split}, \code{config}, \code{seed}, \code{run}, \code{score}, \code{raw\_text}, \code{boxes}};
+  % ---- tầng 5 ----
+  \node[forange, text width=2.6cm] (e1) at (4.225,-7.0)  {\code{thresholds.json}\\$t_{90}$, $t_{95}$ trên val};
+  \node[forange, text width=2.6cm] (e2) at (7.475,-7.0)  {\code{val\_selection.csv}\\chọn cấu hình C4, E5};
+  \node[fb,      text width=2.6cm] (e3) at (10.725,-7.0) {\code{summary.csv/.md}\\bảng chính (run 0)};
+  \node[fb,      text width=2.6cm] (e4) at (13.975,-7.0) {\code{strata}, \code{comparisons}\\\code{run\_agreement}};
+  % ---- tầng 6 ----
+  \node[fred, text width=5.7cm] (au) at (5.85,-8.75) {T1 che nốt · T2 che ngẫu nhiên · T3 tráo ảnh\\$\rightarrow$ \code{outputs/audit/*.json} ($\Delta_{\text{occ}}$, $n_{\text{T2}}$)};
+  \node[fb, text width=5.7cm] (rep) at (12.35,-8.75) {Bảng và hình trong báo cáo\\(Mục~\ref{sec:data} và Mục~\ref{sec:results})};
+  % ---- mũi tên giữa các tầng ----
+  \foreach \x in {4.9,9.3,13.5}{\draw[farr] (\x,-0.5) -- (\x,-1.3);}
+  \foreach \x in {3.94,6.52,9.10,11.68,14.26}{\draw[farr] (\x,-2.2) -- (\x,-3.05);}
+  \foreach \x in {3.94,6.52,9.10,11.68,14.26}{\draw[farr] (\x,-3.95) -- (\x,-4.8);}
+  \foreach \x in {4.225,7.475,10.725,13.975}{\draw[farr] (\x,-5.7) -- (\x,-6.55);}
+  \foreach \x in {4.225,7.475}{\draw[farr] (\x,-7.45) -- (\x,-8.3);}
+  \foreach \x in {10.725,13.975}{\draw[farr] (\x,-7.45) -- (\x,-8.3);}
+\end{tikzpicture}
+\caption{Kiến trúc hệ thống theo tầng. Cột trái ghi module và script tương ứng trong \code{code/}. Ô xám: VLM
+dùng nguyên trạng; ô xanh dương: VLM có LoRA; ô xanh lá: baseline CNN; ô cam: các file chỉ tính trên validation,
+dùng để chọn ngưỡng và cấu hình (C4 và cấu hình cho E5 được chọn từ \code{val\_selection.csv}); ô đỏ: kiểm toán E5.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Luồng xử lý của trợ lý}
+
+Hình~\ref{fig:pipeline} mô tả luồng xử lý của trợ lý cho một ảnh. Ảnh CXR được chuẩn hoá về 896$\times$896 và
+đưa vào VLM cùng một câu hỏi cố định. VLM trả lời bằng JSON gồm kết luận có/không và danh sách box. Song song
+với việc sinh văn bản, mô hình được chấm điểm trên hai câu trả lời ép buộc để có điểm liên tục $s(x)$
+(Mục~\ref{sec:score}). Parser kiểm tra cú pháp và chuyển câu trả lời thành nhãn và box; điểm $s(x)$ dùng để vẽ
+ROC và chọn ngưỡng.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.5cm and 0.45cm, fb/.append style={font=\scriptsize}]
+  \node[fb, text width=1.6cm, minimum height=1.05cm] (img) {Ảnh CXR\\896$\times$896};
+  \node[fgray, right=of img, text width=2.0cm, minimum height=1.05cm] (enc) {Bộ mã hoá ảnh\\(đông cứng)};
+  \node[fblue, right=of enc, text width=1.6cm, minimum height=1.05cm] (llm) {LLM\\+ LoRA $r{=}16$};
+  \node[fb, right=of llm, text width=2.75cm, minimum height=1.05cm, yshift=0.8cm] (json) {Sinh văn bản\\JSON yes/no + box};
+  \node[fb, right=of llm, text width=2.75cm, minimum height=1.05cm, yshift=-0.8cm] (sc) {Chấm điểm ép buộc\\$s(x)\in[0,1]$};
+  \node[fb, right=0.4cm of json, text width=1.9cm, minimum height=1.05cm] (parse) {Parser\\nhãn + box};
+  \node[forange, right=0.4cm of sc, text width=1.9cm, minimum height=1.05cm] (thr) {So với ngưỡng\\$t_{90}$, $t_{95}$};
+  \node[fb, above=0.45cm of enc, text width=4.6cm, xshift=1.2cm] (q) {Câu hỏi cố định: \emph{``Is there a lung nodule or mass\dots?''}};
+  \draw[farr] (img) -- (enc); \draw[farr] (enc) -- (llm);
+  \draw[farr] (llm.east) -- ++(0.2,0) |- (json.west);
+  \draw[farr] (llm.east) -- ++(0.2,0) |- (sc.west);
+  \draw[farr] (json) -- (parse); \draw[farr] (sc) -- (thr);
+  \draw[farr] (q.south -| llm.north) -- (llm.north);
+\end{tikzpicture}
+\caption{Luồng xử lý của trợ lý cho một ảnh. Chỉ các ma trận LoRA trong LLM (ô xanh) được huấn luyện; bộ mã
+hoá ảnh (ô xám) đông cứng. Nhánh trên cho câu trả lời đọc được và box; nhánh dưới cho điểm liên tục dùng để chọn
+ngưỡng trên validation.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Mô hình}
+
+\paragraph{VLM chính: MedGemma-4B-it.} LoRA $r = 16$, $\alpha = 32$, dropout 0,05, gắn vào các lớp attention
+và MLP của LLM; bộ mã hoá ảnh đông cứng. Lý do chọn: (i) là mô hình y khoa mở mới nhất~\cite{sellergren2026medgemma};
+(ii) zero-shot nó rơi đúng vào chế độ báo bình thường~\cite{nishio2026zeroshot}, nên câu hỏi ``LoRA có kéo mô
+hình ra khỏi chế độ đó không'' có tính thông tin cao; (iii) đầu vào 896$\times$896 trùng với độ phân giải tối ưu
+cho CAD nốt~\cite{kim2020matrix}, nên nút thắt nhiều khả năng nằm ở cách gộp đặc trưng và dữ liệu, không ở độ
+phân giải. Rủi ro: MedGemma không được huấn luyện mạnh để xuất toạ độ, nên khả năng định vị phải học hoàn toàn
+qua LoRA.
+
+\paragraph{VLM thứ hai: Qwen2.5-VL-3B-Instruct.} Dùng cho zero-shot và cho cấu hình LoRA tốt nhất, để so mô
+hình y khoa với mô hình đa năng có sẵn khả năng xuất box. Lưu ý: \cite{nishio2026zeroshot} thử Qwen3-VL-8B
+(sensitivity 7,8\%), không phải Qwen2.5-VL-3B, nên không so trực tiếp số liệu.
+
+\paragraph{Baseline CNN.}
+\begin{itemize}
+  \item \textbf{B1 --- classifier:} DenseNet-121~\cite{huang2017densenet} tiền huấn luyện trên CXR
+        (thư viện TorchXRayVision~\cite{cohen2022torchxrayvision}), fine-tune nhị phân nốt/khối.
+  \item \textbf{B2 --- detector:} YOLOv8~\cite{jocher2023yolov8} huấn luyện trên box nốt/khối, đầu vào 896.
+\end{itemize}
+
+\subsection{Các cấu hình}
+
+\begin{table}[H]
+\centering
+\caption{Các cấu hình được so sánh.}
+\label{tab:configs}
+\small
+\begin{tabularx}{\textwidth}{@{}l L l@{}}
+\toprule
+\textbf{Mã} & \textbf{Cấu hình} & \textbf{Đầu ra} \\
+\midrule
+C0 & VLM zero-shot (MedGemma-4B, Qwen2.5-VL-3B) & JSON yes/no + box \\
+C1 & LoRA MedGemma-4B, chỉ phân loại & yes/no \\
+C2 & LoRA MedGemma-4B, phân loại và định vị & yes/no + box \\
+C3 & C2 + cân bằng lớp (oversampling ca dương 1:1, trọng số loss cho token trả lời) & yes/no + box \\
+C4 & Cấu hình tốt nhất trong C1--C3, áp lên Qwen2.5-VL-3B & như cấu hình được chọn \\
+B1 & DenseNet-121 classifier & xác suất \\
+B2 & YOLOv8 detector & box + điểm \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Mở rộng, không thuộc cam kết.} C5 --- VLM có hỗ trợ vùng: đưa box đề xuất của B2, hoặc ảnh cắt theo
+box, vào prompt để VLM xác nhận và mô tả, nhắm vào giả thuyết gộp toàn cục~\cite{muthyala2026frozen}. C6 --- chia
+ô hoặc cắt theo trường phổi để vượt 896\,px hiệu dụng~\cite{sabottke2020resolution,kim2020matrix}.
+
+\subsection{Định dạng huấn luyện và suy luận}
+
+\paragraph{Câu hỏi cố định.}
+\begin{itemize}
+  \item Định vị (C0, C2--C4): \emph{``Is there a lung nodule or mass on this chest X-ray? If yes, give the
+        bounding box(es) in pixel coordinates. Answer in JSON.''}
+  \item Chỉ phân loại (C1): \emph{``Is there a lung nodule or mass on this chest X-ray? Answer in JSON.''}
+\end{itemize}
+
+\paragraph{Đáp án đích.} Sinh tự động từ nhãn gốc: box của các bác sĩ được hợp nhất bằng
+WBF~\cite{solovyev2021wbf}, quy về toạ độ pixel trên ảnh 896$\times$896 dạng $[x_1,y_1,x_2,y_2]$. Ví dụ
+ca dương có đáp án \code{\{"nodule": "yes", "boxes": [[412, 230, 468, 281]]\}}, còn ca âm có đáp án
+\code{\{"nodule": "no", "boxes": []\}}. Với C1 (chỉ phân loại), đáp án chỉ có khoá \code{nodule}. Không dùng câu
+hỏi--đáp do LLM sinh, để tránh nhiễu nhãn. Không đưa ngữ cảnh lâm sàng vào prompt trong điều kiện chính, vì ngữ
+cảnh có thể ``lộ'' đáp án~\cite{cusick2026context}.
+
+\paragraph{Điểm liên tục.}\label{sec:score} Để vẽ ROC và chọn ngưỡng, VLM cần một điểm liên tục chứ không chỉ
+nhãn. Đồ án so log-xác suất của hai chuỗi trả lời ép buộc $a_{+} = $ \code{\{"nodule": "yes} và $a_{-} = $
+\code{\{"nodule": "no} (không có dấu nháy đóng), tính từ token đầu tiên mà hai chuỗi khác nhau:
+\begin{equation}
+  s(x) = \frac{p_\theta(a_{+} \mid x, q)}{p_\theta(a_{+} \mid x, q) + p_\theta(a_{-} \mid x, q)} = \sigma\big(\log p_\theta(a_{+} \mid x, q) - \log p_\theta(a_{-} \mid x, q)\big).
+\end{equation}
+Hình~\ref{fig:yesno} minh hoạ cách tính. Ngưỡng $t_{90}$ là ngưỡng nhỏ nhất mà specificity trên validation đạt
+$\ge 0{,}90$, tức khoảng 90\% ảnh âm của validation có điểm dưới ngưỡng; $t_{95}$ tính tương tự. Ngưỡng được tính
+riêng cho từng bộ (cấu hình, seed, lần chạy), lưu trong \code{thresholds.json} với khoá \code{config|seed|run},
+rồi áp nguyên lên cả ba tập test. Điểm $s(x)$ được tính độc lập với văn bản sinh ra, nên vẫn có cả khi câu trả lời
+không parse được. CNN dùng điểm gốc của chúng: xác suất sigmoid (B1) và điểm box cao nhất của ảnh (B2).
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[node distance=0.4cm and 0.5cm]
+  \node[fb, text width=2.6cm, minimum height=1.6cm] (ctx) at (1.4,0) {Ảnh $x$ + câu hỏi $q$\\+ tiền tố chung\\\code{\{\dq{}nodule\dq{}: \dq{}}};
+  \node[fgreen, text width=2.6cm] (yes) at (4.95,0.75) {tiếp \code{yes}\\$\log p_\theta(a_{+}\mid x,q)$};
+  \node[fred, text width=2.6cm] (no) at (4.95,-0.75) {tiếp \code{no}\\$\log p_\theta(a_{-}\mid x,q)$};
+  \node[draw=black!60, circle, inner sep=1pt, font=\small] (minus) at (7.0,0) {$-$};
+  \node[fb, text width=0.85cm] (sig) at (8.05,0) {$\sigma(\cdot)$};
+  \node[fblue, text width=0.8cm] (s) at (9.3,0) {$s(x)$};
+  \draw[farr] (ctx.east) -- ++(0.35,0) |- (yes.west);
+  \draw[farr] (ctx.east) -- ++(0.35,0) |- (no.west);
+  \draw[farr] (yes.east) -| (minus.north);
+  \draw[farr] (no.east) -| (minus.south);
+  \draw[farr] (minus) -- (sig); \draw[farr] (sig) -- (s);
+  % ---- ô phải: chọn ngưỡng trên val ----
+  \begin{scope}[xshift=10.55cm, yshift=-1.25cm]
+  \begin{axis}[width=5.0cm, height=3.6cm, xmin=0, xmax=1, ymin=0, ymax=3.3,
+      axis lines=left, ytick=\empty, xtick={0,0.5,1}, font=\scriptsize,
+      xlabel={$s(x)$ trên validation}, xlabel style={yshift=3pt}, every axis plot/.style={thick, samples=80}]
+    \addplot[domain=0:1, okgreen!80!black, fill=okgreen!12] {2.7*exp(-((x-0.18)^2)/(2*0.10^2))} \closedcycle;
+    \addplot[domain=0:1, badred, fill=badred!10, opacity=0.9] {1.3*exp(-((x-0.62)^2)/(2*0.17^2))} \closedcycle;
+    \draw[warnorange, very thick, dashed] (axis cs:0.31,0) -- (axis cs:0.31,3.2);
+    \node[font=\scriptsize, text=warnorange, anchor=west] at (axis cs:0.32,3.0) {$t_{90}$};
+    \node[font=\tiny, text=okgreen!70!black] at (axis cs:0.15,2.95) {ảnh âm};
+    \node[font=\tiny, text=badred] at (axis cs:0.72,1.55) {ảnh dương};
+  \end{axis}
+  \end{scope}
+\end{tikzpicture}
+\caption{Cách tính điểm liên tục $s(x)$ cho VLM và chọn ngưỡng. Trái: hai câu trả lời ép buộc dùng chung ảnh,
+câu hỏi và tiền tố; hiệu log-xác suất qua hàm sigmoid cho $s(x)$. Phải (minh hoạ, không phải kết quả): $t_{90}$
+đặt sao cho 90\% ảnh âm của validation có điểm dưới ngưỡng; ảnh dương có điểm trên ngưỡng được tính là phát hiện.}
+\label{fig:yesno}
+\end{figure}
+
+\paragraph{Câu trả lời không parse được.} Khi tính sensitivity và specificity thô, câu trả lời không parse được
+tính là ``no''. Riêng các chỉ số chế độ báo bình thường (tỷ lệ ``no'' trên ca dương, ``yes'' trên ca âm) chỉ tính
+trên câu trả lời parse được, và tỷ lệ không parse được được báo riêng. Mọi chỉ số được tính lại từ văn bản thô bằng
+parser hiện hành.
+
+\paragraph{Sinh văn bản.} C0 dùng giải mã tham lam (nhiệt độ 0) cho dòng kết quả chính, tối đa 256 token. Hai lần
+chạy ở nhiệt độ 0,7 chỉ dùng để đo độ ổn định: tỷ lệ đồng thuận trên các ảnh parse được ở mọi lần chạy.
+
+\subsection{Huấn luyện}
+
+\begin{itemize}
+  \item SFT với loss chỉ tính trên token câu trả lời; tối ưu AdamW, learning rate $10^{-4}$, lịch cosine,
+        warmup 3\%, 3 epoch, batch hiệu dụng 8 (batch 1 $\times$ tích luỹ gradient 8), bf16, gradient checkpointing.
+  \item C1, C2 dùng tỷ lệ tự nhiên sau khi giảm bớt ảnh âm (tối đa 4 ảnh âm cho mỗi ảnh dương, cờ
+        \code{--neg-per-pos 4}); C3 thêm oversampling ca dương 1:1 (\code{--balance}) và trọng số loss $w_{+} = 2$
+        cho ca dương (\code{--pos-weight 2.0}, cố định theo \code{RUNBOOK.md}).
+        $w_{+}$ áp lên mọi token đáp án của ca dương, kể cả token box. Loss được chuẩn hoá theo tổng số token nhãn
+        trong cả cửa sổ tích luỹ gradient, để $w_{+}$ vẫn có tác dụng khi batch bằng 1 (Hình~\ref{fig:sft}).
+  \item Mỗi cấu hình C1--C3 chạy 3 seed; C4 chạy 1--3 seed; B1, B2 mỗi loại 3 seed.
+  \item Ngưỡng chọn trên validation; mỗi tập test chỉ dùng một lần. Cấu hình áp cho C4 và cho
+        kiểm toán E5 được chọn theo \code{val\_sens90} (sensitivity trên validation tại ngưỡng $t_{90}$ của chính
+        lần chạy đó) trung bình qua các seed, đọc từ \code{val\_selection.csv}; không bao giờ dựa trên test.
+\end{itemize}
+
+Hình~\ref{fig:sft} cho thấy một mẫu huấn luyện sau khi ghép chuỗi. Toàn bộ token của mẫu chat (token ảnh, câu
+hỏi, tiền tố vai trò) được gán nhãn $-100$ nên không đóng góp vào loss. Chỉ token của câu trả lời JSON được tính.
+Với một cửa sổ tích luỹ gradient $\mathcal{W}$ gồm 8 mẫu, loss là
+\begin{equation}
+  \mathcal{L}_{\mathcal{W}} = \frac{\sum_{i \in \mathcal{W}} w_i \sum_{t \in \mathcal{A}_i} -\log p_\theta(y_{i,t} \mid y_{i,<t}, x_i, q)}
+  {\sum_{i \in \mathcal{W}} |\mathcal{A}_i|},
+  \qquad w_i = \begin{cases} w_{+} & \text{nếu ca dương (C3)} \\ 1 & \text{ngược lại,} \end{cases}
+\end{equation}
+trong đó $\mathcal{A}_i$ là tập vị trí token đáp án của mẫu $i$. Ở C1 và C2, mọi $w_i = 1$.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm,
+    tok/.style={draw=black!45, minimum height=0.62cm, inner sep=1.5pt, font=\scriptsize\ttfamily, anchor=west},
+    msk/.style={tok, fill=black!10, text=black!55},
+    ans/.style={tok, fill=uitblue!15, draw=uitblue},
+    ansp/.style={tok, fill=badred!12, draw=badred}]
+  % ---- ca dương ----
+  \node[font=\footnotesize\bfseries, anchor=east] at (-0.1,0) {Ca dương};
+  \node[msk, minimum width=1.45cm] (a1) at (0,0) {<image> \dots};
+  \node[msk, minimum width=2.75cm] (a2) at (a1.east) {Is there a lung nodule \dots};
+  \node[msk, minimum width=1.05cm] (a3) at (a2.east) {model:};
+  \node[ansp] (a4) at (a3.east) {\{\dq{}nodule\dq{}: \dq{}};
+  \node[ansp] (a5) at (a4.east) {yes};
+  \node[ansp] (a6) at (a5.east) {\dq{}, \dq{}boxes\dq{}: [[412, 230, 468, 281]]\}};
+  % ---- ca âm ----
+  \node[font=\footnotesize\bfseries, anchor=east] at (-0.1,-1.25) {Ca âm};
+  \node[msk, minimum width=1.45cm] (b1) at (0,-1.25) {<image> \dots};
+  \node[msk, minimum width=2.75cm] (b2) at (b1.east) {Is there a lung nodule \dots};
+  \node[msk, minimum width=1.05cm] (b3) at (b2.east) {model:};
+  \node[ans] (b4) at (b3.east) {\{\dq{}nodule\dq{}: \dq{}};
+  \node[ans] (b5) at (b4.east) {no};
+  \node[ans] (b6) at (b5.east) {\dq{}, \dq{}boxes\dq{}: []\}};
+  % ---- chú thích ----
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (0,-1.7) -- (a3.east |- 0,-1.7)
+     node[midway, below=5pt, fnote] {prompt: nhãn $=-100$, không tính loss};
+  \draw[decorate, decoration={brace, amplitude=4pt}] (a4.west |- 0,0.42) -- (a6.east |- 0,0.42)
+     node[midway, above=5pt, fnote, text=badred] {token đáp án, trọng số $w_{+}=2$ ở C3 (kể cả token box)};
+  \draw[decorate, decoration={brace, amplitude=4pt, mirror}] (b4.west |- 0,-1.7) -- (b6.east |- 0,-1.7)
+     node[midway, below=5pt, fnote, text=uitblue] {token đáp án, trọng số 1};
+\end{tikzpicture}
+\caption{Định dạng một mẫu huấn luyện và mặt nạ loss (minh hoạ; số token ảnh và mẫu chat phụ thuộc mô hình).
+Ô xám: token ảnh, câu hỏi và tiền tố vai trò, bị loại khỏi loss. Ô màu: token đáp án được tính loss; ở C3, mọi
+token đáp án của ca dương nhân với $w_{+}$. Loss chia cho tổng số token nhãn của cả cửa sổ tích luỹ gradient.}
+\label{fig:sft}
+\end{figure}
+
+\paragraph{Ngân sách tính toán.} Huấn luyện trên Colab. MedGemma chỉ chạy được trên GPU có compute capability
+$\ge 8$ (L4 hoặc A100, bf16 thật), vì fp16 bị tràn số. Lượt LoRA đầu tiên dùng để đo thời gian. Nếu một lượt
+MedGemma-4B vượt 3 giờ, cắt giảm theo thứ tự: giảm số ảnh âm (giữ toàn bộ ảnh dương), giảm độ phân giải (chỉ với
+Qwen2.5-VL; processor của MedGemma cố định 896\,px), giảm còn 2 epoch, giảm C1 còn 1 seed.
+
+\subsection{Kiểm toán ``nhìn đúng chỗ''}
+\label{sec:audit}
+
+Một trợ lý trả lời đúng nhưng nhìn sai chỗ (ví dụ dựa vào dấu hiệu máy chụp hay nhãn chữ trên phim) là không an
+toàn~\cite{bernstein2023incorrect,lee2023humanai}. Kiểm toán chạy trên mọi ảnh dương của \code{test} (VinBigData)
+và \code{test\_jsrt}, với ba phép thử ở Bảng~\ref{tab:audit} và Hình~\ref{fig:occlusion}. Một ảnh được coi là
+``yes'' khi $s(x) \ge t_{90}$, với $t_{90}$ lấy từ \code{thresholds.json} của đúng cấu hình đó (seed 0, run 0).
+
+\begin{table}[H]
+\centering
+\caption{Các phép thử phụ thuộc thị giác.}
+\label{tab:audit}
+\small
+\begin{tabularx}{\textwidth}{@{}l L L@{}}
+\toprule
+\textbf{Mã} & \textbf{Phép thử} & \textbf{Hành vi mong đợi} \\
+\midrule
+T1 & Che nốt: box nới 10\% (5\% mỗi cạnh), tô bằng giá trị trung bình của ảnh & Đáp án đổi từ ``yes'' sang ``no'' \\
+T2 & Che vùng ngẫu nhiên cùng kích thước với box đã nới, không giao vùng T1, $\ge 90\%$ diện tích nằm trong mặt nạ
+phổi (PSPNet của TorchXRayVision, dự phòng bằng mặt nạ heuristic) & Đáp án giữ nguyên \\
+T3 & Thay bằng một ảnh âm chọn ngẫu nhiên trong cùng tập test & ``no'' (báo tỷ lệ ``yes'') \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm]
+  \newcommand{\cxr}[2]{% ảnh CXR giản lược tại (#1,#2), cỡ 3x3.4
+    \fill[black!82, rounded corners=4pt] (#1,#2) rectangle ++(3,3.4);
+    \fill[black!45] (#1+0.35,#2+0.55) .. controls (#1+0.3,#2+2.6) and (#1+0.9,#2+3.1) .. (#1+1.35,#2+3.0)
+                    -- (#1+1.35,#2+0.75) -- cycle;
+    \fill[black!45] (#1+2.65,#2+0.55) .. controls (#1+2.7,#2+2.6) and (#1+2.1,#2+3.1) .. (#1+1.65,#2+3.0)
+                    -- (#1+1.65,#2+0.75) -- cycle;}
+  % ---- ảnh gốc ----
+  \cxr{0}{0}
+  \fill[white!85!black] (0.78,2.05) circle (0.17);
+  \draw[okgreen, thick] (0.55,1.82) rectangle (1.01,2.28);
+  \node[fnote, text=black, font=\footnotesize\bfseries] at (1.5,-0.3) {Ảnh gốc};
+  \node[fnote] at (1.5,-0.65) {$s \ge t_{90}$ (``yes'')};
+  % ---- T1 ----
+  \cxr{3.8}{0}
+  \fill[black!62] (4.33,1.80) rectangle (4.83,2.30);
+  \draw[badred, thick, dashed] (4.33,1.80) rectangle (4.83,2.30);
+  \node[fnote, text=black, font=\footnotesize\bfseries] at (5.3,-0.3) {T1: che nốt};
+  \node[fnote] at (5.3,-0.65) {box nới 10\%, tô giá trị TB};
+  % ---- T2 ----
+  \cxr{7.6}{0}
+  \fill[white!85!black] (8.38,2.05) circle (0.17);
+  \draw[okgreen, thick] (8.15,1.82) rectangle (8.61,2.28);
+  \draw[badred, thin, dashed] (8.13,1.80) rectangle (8.63,2.30);
+  \fill[black!62] (9.75,1.15) rectangle (10.25,1.65);
+  \draw[warnorange, thick, dashed] (9.75,1.15) rectangle (10.25,1.65);
+  \node[fnote, text=black, font=\footnotesize\bfseries] at (9.1,-0.3) {T2: che ngẫu nhiên};
+  \node[fnote] at (9.1,-0.65) {cùng cỡ, trong phổi, không giao T1};
+  % ---- T3 ----
+  \cxr{11.4}{0}
+  \node[fnote, text=black, font=\footnotesize\bfseries] at (12.9,-0.3) {T3: tráo ảnh};
+  \node[fnote] at (12.9,-0.65) {ảnh âm khác trong tập};
+  % ---- công thức ----
+  \node[draw=uitblue, fill=softgray, rounded corners=2pt, align=center, font=\small, text width=14.0cm, inner sep=5pt]
+     at (7.2,-2.35) {$\displaystyle
+     \Delta_{\text{occ}} = \underbrace{\frac{\#\{\text{yes}\rightarrow\text{no ở T1}\}}{\#\{\text{yes ở ảnh gốc}\}}}_{\text{flip\_t1}}
+     - \underbrace{\frac{\#\{\text{yes}\rightarrow\text{no ở T2}\}}{\#\{\text{yes ở ảnh gốc}\}}}_{\text{flip\_t2}}$
+     \quad trên cùng $n_{\text{T2}}$ ảnh dương lấy mẫu được vùng T2};
+\end{tikzpicture}
+\caption{Minh hoạ ba phép thử của kiểm toán ``nhìn đúng chỗ'' (ảnh giản lược). Khung xanh: box nốt tham chiếu;
+khung đỏ nét đứt: vùng T1 (box nới 10\%); khung cam nét đứt: vùng T2 cùng kích thước, $\ge 90\%$ nằm trong mặt nạ
+phổi. $\Delta_{\text{occ}}$ là hiệu tỷ lệ đổi đáp án giữa T1 và T2, tính bắt cặp trên cùng tập ảnh.}
+\label{fig:occlusion}
+\end{figure}
+
+Chỉ số chính là $\Delta_{\text{occ}} = \text{tỷ lệ đổi đáp án ở T1} - \text{tỷ lệ đổi ở T2}$. Tỷ lệ đổi đáp án là
+phần các ảnh có đáp án ``yes'' ở ảnh gốc chuyển thành ``no'' sau khi che. Cả hai vế tính trên cùng tập con bắt cặp
+gồm các ảnh lấy mẫu được vùng T2, nên phải báo kèm số ảnh $n_{\text{T2}}$ (khoá \code{n\_t2\_ok}, \code{delta} trong
+file \code{audit/*.json}). Tỷ lệ đổi ở T1 trên toàn bộ ca dương (\code{flip\_t1\_all}) chỉ để tham khảo.
+$\Delta_{\text{occ}}$ lớn cho thấy quyết định dựa vào vùng nốt; $\Delta_{\text{occ}} \approx 0$ cho thấy mô hình
+nhạy với mọi nhiễu loạn chứ không riêng nốt. T3 báo tỷ lệ ``yes'' trên ảnh tráo (\code{yes\_rate\_t3}), mong đợi
+gần $1 - 0{,}90 = 0{,}10$. Kết quả được phân tầng theo kích thước nốt và theo độ mờ JSRT 1--5. Với VinBigData và NIH,
+kích thước chia theo tertile diện tích box tương đối (ngưỡng lấy từ ca dương của tập train VinBigData, lưu ở
+\code{e0\_data\_edges.json}); với JSRT, chia theo mm: $\le 10$, 10--20 và $> 20$\,mm. Kiểm toán áp cho
+C0-MedGemma, cấu hình LoRA tốt nhất theo \code{val\_selection.csv} (adapter seed 0) và B2 (trọng số seed 0).

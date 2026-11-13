@@ -1,0 +1,221 @@
+% ============================================================================
+%  CHƯƠNG 4b. THÍ NGHIỆM, ĐÁNH GIÁ VÀ KẾT QUẢ
+% ============================================================================
+\clearpage
+\section{Thí nghiệm, đánh giá và kết quả}
+\label{sec:results}
+
+\begin{warnbox}
+\textbf{Trạng thái.} Báo cáo đang ở giai đoạn đề cương: thiết kế thí nghiệm và cách đánh giá đã chốt, mã nguồn
+(gói \code{nodulecxr}) đã cài đặt xong và qua 75 kiểm thử trên CPU; các bước cần GPU chưa chạy, nên chưa có kết quả. Các ô \textcolor{badred}{[--]} sẽ được điền tự
+động từ file dự đoán sau khi chạy E0--E5.
+\end{warnbox}
+
+\subsection{Thiết kế thí nghiệm}
+
+Bảng~\ref{tab:experiments} liệt kê sáu thí nghiệm; Hình~\ref{fig:workflow} cho thứ tự chạy và các phụ thuộc.
+Các thí nghiệm phải chạy đúng thứ tự này. E4 và E5 phụ thuộc vào cấu hình được chọn, và cấu hình đó chỉ được chọn
+từ \code{val\_selection.csv}, file do \code{make\_report.py} sinh ra sau E3. Lệnh cụ thể của từng bước nằm trong
+\code{code/RUNBOOK.md}; Phụ lục~\ref{app:protocol} tóm tắt đầu vào, đầu ra và bảng mà mỗi bước điền.
+
+\begin{table}[H]
+\centering
+\caption{Các thí nghiệm.}
+\label{tab:experiments}
+\small
+\begin{tabularx}{\textwidth}{@{}l L L@{}}
+\toprule
+\textbf{Mã} & \textbf{Nội dung} & \textbf{Kết quả cần có} \\
+\midrule
+E0 & Chuẩn bị dữ liệu: số ca Nodule/Mass, phân bố kích thước box, độ đồng thuận giữa bác sĩ; hợp nhất box & Bảng~\ref{tab:data-stats} \\
+E1 & Baseline B1, B2 trên VinBigData, đánh giá trên 3 tập test, mỗi loại 3 seed & AUC, sens@spec0,90, FROC \\
+E2 & Zero-shot C0 cho MedGemma-4B và Qwen2.5-VL-3B: 1 lần nhiệt độ 0 (dòng chính) và 2 lần nhiệt độ 0,7 (đo độ ổn định) & Bảng zero-shot, tỷ lệ parse lỗi, tỷ lệ đồng thuận \\
+E3 & LoRA C1, C2, C3 trên MedGemma-4B, mỗi cấu hình 3 seed & Bảng so sánh, đường học, sensitivity theo epoch \\
+E4 & C4: cấu hình tốt nhất áp lên Qwen2.5-VL-3B, 1--3 seed & So sánh mô hình y khoa với mô hình đa năng \\
+E5 & Kiểm toán ``nhìn đúng chỗ'' (Mục~\ref{sec:audit}) cho C0, cấu hình LoRA tốt nhất và B2; phân tầng & Bảng đổi đáp án, sensitivity theo tầng \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm, fb/.append style={font=\scriptsize, minimum height=0.85cm}]
+  \node[fgray, text width=1.5cm, minimum height=1.15cm] (pc) at (0.9,0) {\textbf{Kiểm tra trước}\\(7 mục)};
+  \node[fb, text width=1.5cm, minimum height=1.15cm] (e0) at (3.1,0) {\textbf{E0}\\dữ liệu, manifest};
+  \node[fgreen, text width=1.8cm] (e1) at (5.6,1.35) {\textbf{E1} B1, B2\\3 seed};
+  \node[fgray, text width=1.8cm] (e2) at (5.6,0) {\textbf{E2} C0\\run 0, 1, 2};
+  \node[fblue, text width=1.8cm] (e3) at (5.6,-1.35) {\textbf{E3} C1--C3\\3 seed};
+  \node[forange, text width=1.9cm, minimum height=1.15cm] (mr1) at (8.35,0) {\code{make\_report}\\(lần 1)};
+  \node[forange, text width=2.0cm, minimum height=1.15cm] (sel) at (10.9,0) {\code{val\_selection}\\chọn theo \code{val\_sens90}};
+  \node[fblue, text width=2.0cm] (e4) at (13.85,1.0) {\textbf{E4} C4\\Qwen + LoRA};
+  \node[fred, text width=2.0cm] (e5) at (13.85,-1.0) {\textbf{E5} kiểm toán\\T1, T2, T3};
+  \node[fb, text width=4.8cm] (mr2) at (10.4,-2.75) {\code{make\_report} (lần cuối) $\rightarrow$ \code{summary.md}\\và mọi bảng của báo cáo};
+  \draw[farr] (pc) -- (e0);
+  \draw[farr] (e0.east) -- ++(0.3,0) |- (e1.west);
+  \draw[farr] (e0) -- (e2);
+  \draw[farr] (e0.east) -- ++(0.3,0) |- (e3.west);
+  \draw[farr] (e1.east) -- ++(0.3,0) |- (mr1.west);
+  \draw[farr] (e2) -- (mr1);
+  \draw[farr] (e3.east) -- ++(0.3,0) |- (mr1.west);
+  \draw[farr] (mr1) -- (sel);
+  \draw[farr] (sel.east) -- ++(0.3,0) |- (e4.west);
+  \draw[farr] (sel.east) -- ++(0.3,0) |- (e5.west);
+  \draw[farr] (e5.south) |- (mr2.east);
+  \draw[farr] (e4.east) -- ++(0.25,0) |- ([yshift=0.15cm]mr2.east);
+  \draw[farr] (e3.south) |- (mr2.west);
+  \begin{scope}[on background layer]
+    \node[draw=warnorange, dashed, thick, rounded corners=4pt, fill=warnorange!4, inner sep=6pt,
+          fit=(mr1)(sel), label={[font=\scriptsize\bfseries, text=warnorange]above:CỔNG: chỉ đọc cột validation}] {};
+  \end{scope}
+  \node[fnote, text=badred, align=left, anchor=north west, text width=4.0cm] at (0.0,-1.0)
+     {Tập test được dự đoán cùng lúc nhưng \textbf{không} dùng để chọn cấu hình hay ngưỡng; số trên test chỉ đọc
+     một lần ở bảng cuối.};
+\end{tikzpicture}
+\caption{Thứ tự chạy thí nghiệm. E1--E3 độc lập với nhau sau E0. \code{make\_report.py} lần 1 sinh
+\code{val\_selection.csv} và \code{thresholds.json}; cổng chọn (khung cam) chỉ dùng số trên validation để chọn cấu
+hình LoRA tốt nhất cho E4 và E5. Lần chạy cuối của \code{make\_report.py} gộp mọi file dự đoán thành bảng báo cáo.}
+\label{fig:workflow}
+\end{figure}
+
+\subsection{Chỉ số đánh giá}
+
+\paragraph{Phát hiện mức ảnh.}
+\begin{itemize}
+  \item Sensitivity, specificity, PPV, NPV, F1; AUC-ROC và AUC-PR.
+  \item \textbf{Chỉ số chính:} sensitivity ở specificity 0,90 (và 0,95). Ngưỡng $t_{90}$, $t_{95}$ chọn trên
+        validation, riêng cho từng bộ (cấu hình, seed, lần chạy), rồi áp nguyên lên cả ba tập test.
+        \textbf{Tiêu chí thành công:} sensitivity $\ge 0{,}60$ ở specificity 0,90 trên VinBigData test.
+  \item \textbf{Chỉ số trên văn bản sinh ra} (chỉ có với VLM chạy \code{--generate all}):
+        \code{raw\_sens}/\code{raw\_spec} tính trên mọi ảnh, câu trả lời không parse được tính là ``no''. Các chỉ số
+        chế độ báo bình thường, \code{no\_on\_pos} (tỷ lệ ``no'' trên ca dương) và \code{yes\_on\_neg} (tỷ lệ ``yes''
+        trên ca âm), chỉ tính trên câu trả lời parse được. Tỷ lệ không parse được (\code{unparsed}) báo riêng.
+        Mọi chỉ số này được tính lại từ \code{raw\_text} bằng parser hiện hành.
+  \item \textbf{C0:} dòng chính chỉ dùng run 0 (nhiệt độ 0, tối đa 256 token). Run 1--2 (nhiệt độ 0,7) chỉ dùng cho
+        tỷ lệ đồng thuận trong \code{run\_agreement.csv}, tính trên các ảnh parse được ở mọi lần chạy.
+  \item \textbf{Theo tỷ lệ bệnh}~\cite{mosquera2024imbalance,kim2023multicentre}: ECE, Brier và balanced Brier;
+        PPV quy về tỷ lệ bệnh 1\% và 3\%. Trên JSRT tỷ lệ nốt là 62\%, nên PPV ở đó không có ý nghĩa lâm sàng.
+\end{itemize}
+
+\paragraph{Định vị.} IoU trung bình và tỷ lệ ``đúng và IoU $\ge 0{,}3$'' (ngưỡng thấp vì nốt nhỏ; báo thêm ở 0,5)
+chỉ dùng các box có điểm $\ge t_{90}$, ngưỡng ứng với specificity 0,90 (box của VLM mang điểm của ảnh). FROC dùng
+mọi box, áp cho B2 và các VLM có box. Trên JSRT, chỉ xét box có điểm cao nhất; ``trúng'' khi tâm box nằm trong
+bán kính nốt cộng biên 5\,mm (12,5\,px trên ảnh 896); báo thêm khoảng cách tâm trung vị (mm, quy đổi 0,4\,mm/px),
+theo cách của NoduLoCC~\cite{mustafic2026noduloc}.
+
+\paragraph{Phân tầng.} Sensitivity được báo theo tầng kích thước (\code{strata.csv}): VinBigData và NIH theo
+tertile diện tích box tương đối, ngưỡng tertile lấy từ ca dương train VinBigData (\code{e0\_data\_edges.json});
+JSRT theo mm: $\le 10$, 10--20, $> 20$\,mm; thêm theo độ mờ JSRT 1--5.
+
+\paragraph{Thống kê.} Trung bình $\pm$ độ lệch chuẩn qua các seed; CI 95\% bằng bootstrap theo ảnh (2.000 lần lấy
+mẫu lại), phân tầng theo nhãn (CI theo từng seed lưu trong \code{summary\_per\_seed.csv}); McNemar cho sens/spec,
+DeLong cho AUC, hiệu chỉnh Holm khi so nhiều cặp (\code{comparisons.csv}). Bootstrap lấy mẫu theo ảnh, không gộp
+theo bệnh nhân, nên CI có thể hẹp hơn thực tế nếu một bệnh nhân có nhiều ảnh; đây là một hạn chế.
+Hình~\ref{fig:evalflow} tóm tắt luồng đánh giá.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[x=1cm,y=1cm, fb/.append style={font=\scriptsize, minimum height=0.85cm}]
+  \node[fb, text width=2.1cm, minimum height=1.3cm] (pr) at (1.15,0) {File dự đoán\\\code{preds/*.jsonl}\\+ manifest};
+  \node[forange, text width=2.2cm, minimum height=1.3cm] (th) at (4.1,0) {\textbf{Validation}\\$t_{90}$, $t_{95}$ theo\\(config, seed, run)};
+  \node[fb, text width=3.0cm, minimum height=1.3cm] (mt) at (7.75,0) {\textbf{Ba tập test}\\sens, spec, AUC, AUC-PR,\\ECE, Brier, PPV ở 1\% và 3\%};
+  \node[fb, text width=3.0cm] (loc) at (7.75,-1.75) {\textbf{Định vị}: box có $s \ge t_{90}$\\FROC: mọi box};
+  \node[fblue, text width=2.5cm] (bs) at (11.55,1.25) {Bootstrap theo ảnh\\CI 95\% (2.000 lần)};
+  \node[fblue, text width=2.5cm] (mc) at (11.55,0) {McNemar (sens/spec)\\DeLong (AUC)};
+  \node[fblue, text width=2.5cm] (ho) at (11.55,-1.25) {Holm khi so\\nhiều cặp};
+  \node[fgreen, text width=1.4cm, minimum height=1.3cm] (out) at (14.5,0) {\code{summary}\\\code{.csv/.md}};
+  \draw[farr] (pr) -- (th); \draw[farr] (th) -- node[fnote, above] {áp nguyên} (mt);
+  \draw[farr] (th.south) |- (loc.west);
+  \draw[farr] (mt.east) -- ++(0.35,0) |- (bs.west);
+  \draw[farr] (mt) -- (mc);
+  \draw[farr] (mc) -- (ho);
+  \draw[farr] (loc.east) -| ([xshift=0.25cm]out.south);
+  \draw[farr] (bs.east) -- ++(0.3,0) |- ([yshift=0.2cm]out.west);
+  \draw[farr] (ho.east) -- ++(0.3,0) |- ([yshift=-0.2cm]out.west);
+\end{tikzpicture}
+\caption{Luồng đánh giá và thống kê trong \code{make\_report.py}. Ngưỡng chỉ chọn trên validation rồi áp nguyên lên
+test; chỉ số định vị dùng box có điểm $\ge t_{90}$; khoảng tin cậy bằng bootstrap theo ảnh; so sánh bắt cặp
+bằng McNemar và DeLong, hiệu chỉnh Holm.}
+\label{fig:evalflow}
+\end{figure}
+
+\subsection{Kết quả chính}
+
+\begin{table}[H]
+\centering
+\caption[Sensitivity ở specificity 0,90 và AUC-ROC trên ba tập test]{Sensitivity ở specificity 0,90 và AUC-ROC trên ba tập test, trung bình $\pm$ độ lệch chuẩn qua seed
+(điền từ \code{outputs/report/summary.md} sau E1--E4; C0 chỉ dùng run 0). Mục tiêu: sens@spec0,90 $\ge 0{,}60$ trên
+VinBigData test.}
+\label{tab:main}
+\small
+\begin{tabular}{@{}l cc cc cc@{}}
+\toprule
+& \multicolumn{2}{c}{\textbf{VinBigData}} & \multicolumn{2}{c}{\textbf{NIH}} & \multicolumn{2}{c}{\textbf{JSRT}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+\textbf{Cấu hình} & Sens@0,90 & AUC & Sens@0,90 & AUC & Sens@0,90 & AUC \\
+\midrule
+C0 MedGemma-4B   & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C0 Qwen2.5-VL-3B & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C1 LoRA, phân loại & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C2 LoRA, + box     & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C3 LoRA, + box, cân bằng & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C4 Qwen2.5-VL-3B LoRA & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+\midrule
+B1 DenseNet-121 & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+B2 YOLOv8       & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Mốc tham chiếu từ tài liệu.} Zero-shot trên JSRT, MedGemma-4b-it đạt sensitivity 5,2\% ở specificity
+100\% và LLaVA-Rad đạt 27,3\% ở specificity 71,0\%~\cite{nishio2026zeroshot}. Các số này dùng đầu ra nhị phân,
+không ở điểm vận hành specificity 0,90, nên chỉ để định hướng.
+
+\subsection{Định vị}
+
+\begin{table}[H]
+\centering
+\caption[Chỉ số định vị]{Chỉ số định vị (điền từ \code{summary.md} sau E1--E4). IoU và Hit chỉ tính trên box có điểm $\ge t_{90}$;
+JSRT dùng box điểm cao nhất, ``trúng'' khi tâm cách tâm nốt $\le$ bán kính nốt + 5\,mm.}
+\label{tab:loc}
+\small
+\begin{tabular}{@{}l ccc c@{}}
+\toprule
+& \multicolumn{3}{c}{\textbf{VinBigData test}} & \textbf{JSRT} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-5}
+\textbf{Cấu hình} & IoU TB & Hit@IoU0,3 & Hit@IoU0,5 & Khoảng cách tâm trung vị (mm) \\
+\midrule
+C0 Qwen2.5-VL-3B & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C2 / C3 (tốt nhất) & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+C4 & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+B2 YOLOv8 & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Chế độ báo bình thường và tác dụng của cân bằng lớp}
+
+So sánh C2 với C3 theo \code{no\_on\_pos}, \code{yes\_on\_neg}, \code{unparsed}, sensitivity theo epoch (dự đoán
+\code{--config <cfg>-ep<k>} trên val cho từng checkpoint của seed 0) và calibration (ECE, balanced Brier).
+\textcolor{badred}{[Điền sau E3: bảng từ \code{summary.md} và đường học.]}
+
+\subsection{Kiểm toán ``nhìn đúng chỗ''}
+
+\begin{table}[H]
+\centering
+\caption[Tỷ lệ đổi đáp án dưới các phép thử che vùng]{Tỷ lệ đổi đáp án dưới các phép thử che vùng (điền từ \code{outputs/audit/*.json} sau E5; một bảng cho
+\code{test}, một cho \code{test\_jsrt}).}
+\label{tab:audit-res}
+\small
+\begin{tabular}{@{}l cccc@{}}
+\toprule
+\textbf{Cấu hình} & T1 (\code{flip\_t1}) & T2 (\code{flip\_t2}) & $\Delta_{\text{occ}}$ ($n_{\text{T2}}$) & T3: tỷ lệ ``yes'' \\
+\midrule
+C0 MedGemma-4B & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+LoRA tốt nhất  & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+B2 YOLOv8      & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} & \textcolor{badred}{[--]} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textcolor{badred}{[Điền sau E5 từ \code{strata.csv} và khoá \code{by\_size}/\code{by\_subtlety} của \code{audit/*.json}: biểu đồ sensitivity theo tầng kích thước (tertile diện tích với VinBigData/NIH;
+$\le 10$, 10--20, $> 20$\,mm với JSRT) và theo độ mờ JSRT 1--5.]}

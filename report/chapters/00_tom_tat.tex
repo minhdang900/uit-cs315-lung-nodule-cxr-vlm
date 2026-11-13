@@ -1,0 +1,28 @@
+\section*{Tóm tắt}
+\addcontentsline{toc}{section}{Tóm tắt}
+
+X-quang ngực (CXR) là xét nghiệm hình ảnh phổ biến nhất, và nhiều ca ung thư phổi lần đầu lộ ra dưới dạng
+nốt hoặc khối trên CXR, nhưng nốt nhỏ và mờ rất dễ bị bỏ sót. Các mô hình ngôn ngữ--thị giác (VLM) đang được
+giới thiệu như trợ lý đọc CXR, song các đánh giá độc lập năm 2026 cho thấy sensitivity zero-shot với nốt phổi
+chỉ đạt 0,6--27,3\%; MedGemma-4B đạt sensitivity 5,2\% ở specificity 100\% --- một \emph{chế độ báo bình
+thường}. Trong khi đó, hệ thống CAD dựa trên CNN đạt AUROC 0,92--0,99. Đồ án xây dựng và đánh giá một
+\textbf{nguyên mẫu trợ lý AI} cho biết ảnh CXR có nốt/khối phổi hay không và chỉ ra vị trí bằng bounding box,
+dựa trên VLM cỡ nhỏ tinh chỉnh LoRA.
+
+Đồ án gồm ba phần. (i) \textbf{Benchmark chuẩn hoá}: prompt và bộ phân tích đầu ra công khai, đầu ra JSON có
+cấu trúc, ngưỡng chọn trên tập validation và chạy lặp; so sánh MedGemma-4B và Qwen2.5-VL-3B với hai baseline
+DenseNet-121 và YOLOv8 trên VinBigData (trong phân phối), NIH ChestX-ray14 và JSRT (ngoài phân phối, có phân
+cấp độ mờ). (ii) \textbf{Tinh chỉnh LoRA} MedGemma-4B cho bài toán chỉ phân loại và phân loại kèm định vị, có
+và không có cân bằng lớp, nhằm kéo mô hình ra khỏi chế độ báo bình thường. (iii) \textbf{Kiểm tra trợ lý có
+nhìn đúng chỗ không}: IoU định vị, so sánh che nốt với che vùng ngẫu nhiên cùng diện tích, và phân tầng theo
+kích thước và độ mờ của nốt. Chỉ số chính là sensitivity ở specificity 0,90, với mục tiêu 0,60; các chỉ số phụ
+gồm AUC-ROC, AUC-PR, calibration và FROC, kèm khoảng tin cậy 95\% bằng bootstrap.
+
+\textbf{Kết quả.} \textcolor{badred}{[Điền sau thí nghiệm E1--E5.]}
+
+\textbf{Kết luận.} \textcolor{badred}{[Điền sau thí nghiệm E1--E5.]} Đây là nguyên mẫu nghiên cứu, không dùng
+cho quyết định lâm sàng.
+
+\vspace{0.6em}
+\noindent\textbf{Từ khoá:} trợ lý AI, mô hình ngôn ngữ--thị giác, LoRA, nốt phổi, X-quang ngực, phát hiện và
+định vị tổn thương, mất cân bằng lớp.
