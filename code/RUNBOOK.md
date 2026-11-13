@@ -29,7 +29,7 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    print({k: v.shape for k, v in ex.items()})
    ```
    Kiểm tra tiền tố của Gemma (prompt phải là tiền tố của prompt+answer) không ném `ValueError`.
-3. **Loss đầu tiên của pilot 64 mẫu.** Chạy `train_lora.py ... --max-train 64 --epochs 1` (xem E3). Dòng log đầu tiên (`logging_steps=10`) phải có `loss` khoảng 0,5–3. Nếu ~10–25 nghĩa là gradient accumulation bị chia hai lần: dừng và sửa.
+3. **Loss đầu tiên của pilot 64 mẫu.** Chạy `train_lora.py ... --max-train 160 --epochs 1` (xem E3; 160 mẫu với grad-accum 8 cho 20 bước tối ưu nên `loss` được ghi ở bước 10 và 20). Dòng log đầu tiên (`logging_steps=10`) phải có `loss` khoảng 0,5–3. Nếu ~10–25 nghĩa là gradient accumulation bị chia hai lần: dừng và sửa. Đọc thêm `train_loss` cuối cùng trong log/`trainer_state.json`.
 4. **Loại GPU.**
    ```python
    import torch; print(torch.cuda.get_device_name(), torch.cuda.is_bf16_supported())
@@ -41,18 +41,44 @@ Làm lần lượt, trước E1–E5. Mục nào không đạt thì dừng và s
    m = YOLO("yolov8s.pt"); m.train(data="<work>/yolo_data_seed0/data.yaml", imgsz=896, epochs=1, project="/content/yolo_smoke", name="s", exist_ok=True)
    print(m.trainer.best)   # file phải tồn tại
    ```
-   (Đường dẫn `data.yaml`: lấy từ thư mục `yolo_data_seed0` do `train_yolo.py` xuất; có thể chạy `train_yolo.py --epochs 1 --work $O/yolo_smoke --out /tmp/x.jsonl` thay thế rồi kiểm tra `$O/yolo_smoke/seed0/weights/best.pt`.)
-6. **Thời gian mỗi ảnh của mặt nạ phổi trong `run_audit.py`.** PSPNet của torchxrayvision chạy trên CPU. Chạy thử `run_audit.py` trên khoảng 10 ảnh và đo thời gian mỗi ảnh. Nếu quá chậm, dùng `--lung-mask heuristic` và ghi quyết định đó vào `$O/budget.md`.
+   Cách thay thế, dùng đủ cờ bắt buộc của `train_yolo.py`:
+   ```bash
+   %%bash
+   export M=../data/processed D=/content/data O=../outputs
+   python scripts/train_yolo.py --manifests $M/manifest_vinbig.csv $M/manifest_nih.csv $M/manifest_jsrt.csv --data-root $D --epochs 1 --work $O/yolo_smoke --out /content/smoke.jsonl
+   ls $O/yolo_smoke/seed0/weights/best.pt
+   ```
+6. **Thời gian mỗi ảnh của mặt nạ phổi trong `run_audit.py`.** PSPNet của torchxrayvision chạy trên CPU. Đo trên 10 ảnh:
+   ```python
+   import sys, time; sys.path.insert(0, "scripts")
+   from run_audit import lung_mask_xrv
+   from nodulecxr.records import read_manifest
+   from nodulecxr.images import load_image
+   df = read_manifest("../data/processed/manifest_jsrt.csv").head(10)
+   lung_mask_xrv(load_image("/content/data", df.iloc[0].path))   # khởi động, không tính giờ
+   t = time.time()
+   for r in df.itertuples(): lung_mask_xrv(load_image("/content/data", r.path))
+   print((time.time() - t) / len(df), "giây/ảnh")
+   ```
+   Nếu quá chậm, dùng `--lung-mask heuristic` và ghi quyết định đó vào `$O/budget.md`.
 
 ## 0. Mỗi phiên Colab
-```bash
-from google.colab import drive; drive.mount('/content/drive')
+```python
+from google.colab import drive, userdata
+drive.mount('/content/drive')
 %cd "/content/drive/MyDrive/ClaudeAI/Projects/UIT-VNU/CS315.G12.LT.TTNT - MachineLearningAdvance/code"
+import os; os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")   # lấy từ Colab Secrets
 !pip install -q -e ".[gpu]"
 !huggingface-cli login --token $HF_TOKEN
 !mkdir -p /content/data && rsync -a ../data/processed/ /content/data/   # đọc ảnh từ ổ local
 ```
-Biến dùng chung: `M="../data/processed"`, `D=/content/data`, `O=../outputs`.
+Biến shell không giữ qua các dòng `!`, nên mọi ô chạy lệnh dưới đây phải bắt đầu bằng `%%bash` và `export` lại biến:
+```bash
+%%bash
+export M=../data/processed D=/content/data O=../outputs
+# HF_TOKEN đã nằm trong os.environ (đặt ở ô Python trên), ô %%bash kế thừa nó
+```
+Biến dùng chung: `M="../data/processed"`, `D=/content/data`, `O=../outputs`. Các khối lệnh bash bên dưới là nội dung ô `%%bash` (sau dòng `export` ở trên).
 
 ## E0. Dữ liệu (Task 5)
 Chạy 3 script `prepare_*` (cờ bắt buộc: `prepare_vinbig.py --train-csv ... --out-root $M` cùng `--png-dir`/`--meta-csv` hoặc `--dicom-dir`; `prepare_nih.py --raw-dir ... --out-root $M`; `prepare_jsrt.py --raw-dir ... --out-root $M`), rồi:
@@ -84,7 +110,7 @@ done
 Script tự bỏ qua ảnh đã chạy, nên nếu Colab ngắt kết nối thì chỉ cần chạy lại cùng lệnh.
 
 ## E3. LoRA MedGemma C1–C3 (3 seed)
-Pilot đo thời gian và loss đầu tiên (kiểm tra mục 3 ở trên): thêm `--max-train 64 --epochs 1` vào một lệnh `train_lora.py` rồi đọc `timing.json` và log.
+Pilot đo thời gian và loss đầu tiên (kiểm tra mục 3 ở trên): thêm `--max-train 160 --epochs 1` vào một lệnh `train_lora.py` rồi đọc `timing.json`, log (`loss` ở bước 10 và 20) và `train_loss` cuối.
 ```bash
 for s in 0 1 2; do
   python scripts/train_lora.py --model medgemma --mode cls --manifest $M/manifest_vinbig.csv --data-root $D --seed $s --out $O/lora/C1-s$s
@@ -107,7 +133,7 @@ done
 Đường học (sensitivity theo epoch): chạy `predict_vlm.py --splits val --generate none` cho từng `checkpoint-*` của seed 0, với `--config <cfg>-ep<k>`.
 
 ## E4. C4: cấu hình tốt nhất trên Qwen2.5-VL-3B (1–3 seed)
-Chọn cấu hình tốt nhất trong C1–C3 theo **sens ở spec 0,90 trên val** (cột `sens` của split `val` không có trong bảng test; xem `thresholds.json` và `summary_per_seed.csv`). Chạy lại `train_lora.py --model qwen` với đúng các cờ của cấu hình đó, rồi dự đoán với `--config C4`.
+Chọn cấu hình tốt nhất trong C1–C3 theo **trung bình `val_sens90` qua các seed** trong `$O/report/val_selection.csv` (sensitivity trên val tại ngưỡng `t90` của đúng lần chạy đó; `val_auc` để tham khảo). Không bao giờ chọn từ các cột của tập test. Chạy `make_report.py` trước để có file này. Chạy lại `train_lora.py --model qwen` với đúng các cờ của cấu hình đó, rồi dự đoán với `--config C4`.
 
 ## Báo cáo
 ```bash
