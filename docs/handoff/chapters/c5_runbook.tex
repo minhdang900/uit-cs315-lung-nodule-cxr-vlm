@@ -126,11 +126,16 @@ của Colab (mất khi hết phiên) và chỉ để \code{data/processed/} trê
       Ảnh PNG phải tên \code{<image\_id>.png}.
 \end{itemize}
 
-\begin{unsurebox}
-Sổ tay chưa kiểm chứng tên bộ PNG cụ thể trên Kaggle. Các bộ cộng đồng kiểu ``vinbigdata chest xray resized png'' thường có
-\code{train\_meta.csv} với cột \code{dim0}, \code{dim1}; hãy mở file kiểm tra: (1) \code{dim0}/\code{dim1} là kích thước \emph{gốc}, không phải kích thước PNG;
-(2) \code{train.csv} đi kèm còn tọa độ gốc. Nếu sai, box sẽ lệch: \code{draw\_boxes.py} ở E0 sẽ cho thấy.
-\end{unsurebox}
+\begin{keybox}
+\textbf{Đã kiểm chứng (2026-11-13), cách đã dùng:} đăng nhập Kaggle bằng \code{kaggle auth login} (OAuth, không cần lưu token), chấp nhận luật cuộc thi, rồi:
+\begin{lstlisting}[language=bash]
+cd ../data/raw/vinbig
+kaggle competitions download vinbigdata-chest-xray-abnormalities-detection -f train.csv && unzip train.csv.zip
+kaggle datasets download xhlulu/vinbigdata-chest-xray-resized-png-1024x1024    # 7.35 GB
+unzip -q vinbigdata-chest-xray-resized-png-1024x1024.zip 'train/*' 'train_meta.csv'
+\end{lstlisting}
+Trong \code{train\_meta.csv}, \code{dim0}/\code{dim1} là kích thước \emph{gốc} (823--3408\,px; không box nào vượt), nên dùng được với cờ mặc định. Ảnh PNG 1024$\times$1024 (đã méo tỷ lệ), code quy về 896$\times$896 theo kích thước gốc. Kết quả E0: xem \code{docs/decisions.md} D29.
+\end{keybox}
 
 \textbf{Tùy chọn: tập test chính thức VinDr-CXR.} \code{prepare\_vinbig.py} có \code{--official-test-csv} và \code{--official-test-dicom}.
 Khi dùng, VinBigData Kaggle được chia 85/15 (train/val) và tập test chính thức trở thành \code{test}. Phần này đọc DICOM bắt buộc.
