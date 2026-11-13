@@ -1,5 +1,6 @@
 """E0: descriptive table for all manifests -> outputs/e0_data.md."""
 import argparse
+from pathlib import Path
 
 import pandas as pd
 
@@ -22,7 +23,8 @@ def main():
         text.append(to_markdown(m, describe_manifest(d, edges)))
     with open(a.out, "w", encoding="utf-8") as f:
         f.write("\n".join(text))
-    pd.Series(edges).to_json(a.out.replace(".md", "_edges.json"))
+    out = Path(a.out)
+    pd.Series(edges).to_json(out.with_name(out.stem + "_edges.json"))
 
 
 if __name__ == "__main__":
