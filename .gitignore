@@ -10,10 +10,14 @@ outputs/
 *.safetensors
 *.ckpt
 *.dcm
+*.dicom
+*.IMG
+*.img
 *.zip
 
 # ---- Bí mật ----
 .env
+kaggle.json
 *.token
 hf_token*
 

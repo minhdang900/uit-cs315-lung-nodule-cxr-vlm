@@ -54,8 +54,8 @@ flowchart LR
 git clone https://github.com/minhdang900/uit-cs315-lung-nodule-cxr-vlm.git
 cd uit-cs315-lung-nodule-cxr-vlm/code
 python -m venv ~/.venvs/nodulecxr && source ~/.venvs/nodulecxr/bin/activate
-pip install -e ".[dev]"
-pytest -q
+pip install -e ".[dev,torchcpu]"   # cần torch để không bị skip test
+pytest -q                          # kỳ vọng: 75 passed
 ```
 
 Chạy GPU (MedGemma cần L4 hoặc A100, không dùng T4): xem `code/RUNBOOK.md`.
